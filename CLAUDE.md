@@ -57,7 +57,9 @@ Updates auf Knopfdruck, Download der Pakete, 15-Minuten-Takt; was der Agent daf�
   Neustart, Pro, dpkg, `snap.rs`, `flatpak.rs` aus den Installationsordnern, `windows.rs` Windows-Version,
   Uninstall-Einträge, PEP-514-Pythons, Store-Apps), `src/service.rs` (Dienst `run`), `src/log.rs` (Zeilen des
   Dienstes: stdout bzw. unter Windows `opensecagent.log`), `src/winsvc/` (Windows-Dienst, `service-install`/
-  `service-uninstall`, `folder.rs` Zugriffsliste des Ordners),
+  `service-uninstall`, `folder.rs` Zugriffsliste des Ordners), `src/windialog.rs` (Anmeldedialog Windows,
+  Aufgabendialoge), `src/texts.rs` (Texte beider Dialoge), `src/legacy_windows.rs` (altes Skript unter Windows),
+  `src/bin/opensecagent-enroll.rs` (Startmenü-Programm, verlangt Administratorrechte),
   `src/dialog.rs` (Anmeldedialog, zenity/kdialog, pkexec), `src/legacy.rs` (altes Skript entfernen).
 - **Windows:** Einrichten des Windows-Rechners, Test-Instanz von opensecmon in WSL, Installer und Signatur in
   `docs/windows.md`. Windows-Code hinter `#[cfg(windows)]`, die Linux-Fassung muss unverändert bauen (CI prüft beides).

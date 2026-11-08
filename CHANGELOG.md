@@ -29,10 +29,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Debian package files: hardened systemd service, polkit action, start menu entry and icon (`dev/deb.sh`).
 - Inventory of Windows: the version of Windows, the programs of the machine and of the users signed in (Uninstall
   entries), Pythons of the Python install manager (PEP 514) and the store apps of all users.
-- Windows installer (Inno Setup, `dev/build-installer.ps1`), signed with Authenticode; for now it only installs the
-  program, the service and the enrollment follow. Icon and version information in `opensecagent.exe`, the C
-  runtime is linked in statically.
+- Windows installer (Inno Setup, `dev/build-installer.ps1`), signed with Authenticode. Icon, version information and
+  manifest in the programs, the C runtime is linked in statically.
 - Windows service: `run` works under the service manager (LocalSystem, delayed automatic start, restarted after
   failures) and writes its lines to `opensecagent.log` in the agent's folder; hidden commands `service-install` and
   `service-uninstall` for the installer. The agent's folder `%ProgramData%\opensecagent` gets an access list for
   SYSTEM and the administrators only; a folder of that name made by another user, or a link, is refused.
+- Windows enrollment dialog (`enroll-dialog`, started by `opensecagent-enroll.exe` from the start menu entry
+  "Enroll with opensecmon", which asks for administrator rights): takes the code from the clipboard, enrolls with a
+  progress bar and says what went wrong, in German or English (texts shared with the Linux dialog).
+- The installer sets up and starts the service, opens the enrollment dialog when the computer is not enrolled yet,
+  adds the start menu entry, and enrolls without questions with `/VERYSILENT /CODE=…`; uninstalling removes the
+  service and the enrollment. `enroll --code-file` reads the code from a file and deletes it.
+- On Windows, the enrollment removes the agent script opensecmon offered before (scheduled task and folder
+  `opensecmon-agent`).

@@ -6,9 +6,9 @@ tun ist, steht in `PLAN.md` im Abschnitt „Phase 3: Windows (Plan)“; diese Da
 
 **Heutiger Stand:** Unter Windows bauen das Programm und die Tests schon (CI-Job `windows-2025`, clippy und
 `cargo test` grün). Es kann sich anmelden und melden, das Inventar liest Windows-Version, Programme und Store-Apps
-(Phase 3a) und läuft als Windows-Dienst (3c); der signierte Installer installiert bisher nur das Programm und richtet
-den Dienst noch nicht ein. Programme nicht angemeldeter Benutzer und Anmeldung über den Installer fehlen. Bis dahin
-melden sich
+(Phase 3a) und läuft als Windows-Dienst (3c); der signierte Installer richtet den Dienst ein, öffnet den
+Anmeldedialog und legt „Bei opensecmon anmelden“ ins Startmenü (3e, noch im Test). Programme nicht angemeldeter
+Benutzer (3b) fehlen. Bis zum Wechsel melden sich
 Windows-Rechner mit dem PowerShell-Skript aus opensecmon (`contrib/opensecmon-agent.ps1`), das zugleich die Vorlage
 für das Inventar ist.
 
@@ -168,7 +168,8 @@ Ablauf (entschieden 2026-11-07, `PLAN.md` „Entschieden“ Punkte 6 und 8):
    `powershell -ExecutionPolicy Bypass -File dev\build-installer.ps1 -CertSha1 <Fingerabdruck>` (oder Variable
    `OPENSECAGENT_SIGN_SHA1`). Ergebnis `target\installer\opensecagent-<version>-x64-setup.exe`, der Name, den
    opensecmon erwartet (`docs/agent-api.md`, „Updates of opensecagent“). Das Skript signiert `opensecagent.exe` vor dem
-   Verpacken; Inno Setup signiert Installer, Deinstaller und die temporären Kopien, die Setup beim Start entpackt
+   Verpacken, ebenso `opensecagent-enroll.exe` (Startmenü-Eintrag); Inno Setup signiert Installer, Deinstaller und
+   die temporären Kopien, die Setup beim Start entpackt
    (`SignTool`, `SignedUninstaller`). Alle mit SHA-256 und Zeitstempel von Certum (`http://time.certum.pl`), damit die
    Signatur auch nach Ablauf des Zertifikats gültig bleibt; danach `signtool verify /pa /all`. Die Authenticode-Signatur
    muss **vor** der eigenen Signatur kommen, weil sie die Datei verändert.
@@ -190,6 +191,22 @@ Ohne Authenticode-Signatur warnt SmartScreen, und Smart App Control kann den Ins
 Tests reicht die unsignierte Fassung (Smart App Control aus oder Testrechner ohne). Mit Signatur kann SmartScreen
 anfangs trotzdem warnen, bis der Installer genug Reputation hat; Smart App Control lässt Dateien mit gültiger
 Signatur einer vertrauenswürdigen Zertifizierungsstelle laufen.
+
+**Was der Installer tut:** installiert `opensecagent.exe` und `opensecagent-enroll.exe` nach
+`Program Files\opensecagent`, hält bei einem Update vorher den Dienst an (`net stop`), richtet ihn danach mit
+`service-install` ein und startet ihn (Ordner `%ProgramData%\opensecagent` mit Zugriffsliste). Ist der Rechner noch
+nicht angemeldet, öffnet er am Ende den Anmeldedialog (ohne zweite UAC-Abfrage, Setup hat schon Administratorrechte);
+Abbrechen heißt später anmelden über „Bei opensecmon anmelden“ im Startmenü (UAC, dann derselbe Dialog). Der Dialog
+nimmt den Code aus der Zwischenablage: in opensecmon „Kopieren“, dann „Anmelden“; liegt schon ein Code dort, sagt er es
+gleich. Die Anmeldung entfernt auch das alte PowerShell-Skript (geplante Aufgabe `opensecmon-agent`, Ordner
+`%ProgramData%\opensecmon-agent`). Ohne Fragen:
+`opensecagent-<version>-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /CODE=osa1_…` (der Code geht über eine Datei im
+temporären Ordner von Setup an das Programm, nicht über dessen Kommandozeile; ohne `/CODE` kein Dialog). Die
+Deinstallation entfernt Dienst, Anmeldung und den Ordner des Agenten; der Rechner bleibt in opensecmon, bis er dort
+gelöscht wird. `opensecagent-enroll.exe` ist ein kleines Fensterprogramm ohne Konsole, das per Manifest
+Administratorrechte verlangt und `opensecagent.exe enroll-dialog` startet; der Dialog selbst (Aufgabendialoge von
+Windows, `src/windialog.rs`) braucht die Common Controls 6 aus dem Manifest beider Programme
+(`packaging/windows/opensecagent.manifest`, eingebunden in `build.rs`).
 
 ## 7. Zurück auf den Linux-Laptop
 

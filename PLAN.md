@@ -398,6 +398,9 @@ Vorschlag in Schritten, je mit Tests, Commit und Bericht:
     einzurichten, bleibt beim Nutzer (`docs/windows.md` Abschnitt 5).
 - **3d Altes Skript entfernen** (`src/legacy.rs` für Windows): geplante Aufgabe `opensecmon-agent` und Ordner
   `%ProgramData%\opensecmon-agent` (wie `Invoke-Uninstall` im Skript), nur nach einer Anmeldung im Standardordner.
+  - **Umgesetzt (2026-11-08, mit 3e):** `src/legacy_windows.rs`: `schtasks.exe /Delete /TN opensecmon-agent /F` aus
+    `System32`, dann der Ordner (eine Verknüpfung an seiner Stelle wird selbst entfernt, nicht ihr Ziel); Tests mit
+    Ordner und Junction. Noch nicht auf einem Rechner mit dem alten Skript ausprobiert.
 - **3e Installer** (Inno Setup, `packaging/windows/`, `dev/build-installer.ps1`, nur auf Auftrag bauen): Installation
   für alle Benutzer nach `Program Files`, Dienst einrichten und starten, Seite mit Feld für den Anmeldecode (vorbelegt,
   wenn die Zwischenablage mit `osa1_` beginnt; leer lassen = später anmelden), Anmeldung ohne den Code in der
@@ -414,6 +417,25 @@ Vorschlag in Schritten, je mit Tests, Commit und Bericht:
     `opensecagent-0.1.2-x64-setup.exe` gebaut und mit dem Certum-Zertifikat signiert, `signtool verify /pa`
     erfolgreich. Vom Nutzer installiert (2026-11-08): Smart App Control ließ ihn durch, UAC zeigte „Verifizierter
     Herausgeber“. Die Signatur ist damit geklärt.
+  - **Zweite Stufe umgesetzt (2026-11-08, „go“ des Nutzers für 3e mit 3d; Entscheidungen: Code über eine temporäre
+    Datei, Startmenü-Eintrag gleich mit, Test-Installer bauen und signieren; statt einer eigenen Code-Seite im
+    Assistenten öffnet der Installer denselben Dialog wie das Startmenü):**
+    - Installer: stoppt bei einem Update den Dienst (`net stop`), installiert `opensecagent.exe` und
+      `opensecagent-enroll.exe`, richtet den Dienst mit `service-install` ein, öffnet den Anmeldedialog, wenn der
+      Rechner noch nicht angemeldet ist, Startmenü „Bei opensecmon anmelden“; `/VERYSILENT /CODE=osa1_…` meldet ohne
+      Dialog an (Code über `{tmp}` und `enroll --code-file`, das die Datei sofort löscht); Deinstallation:
+      `service-uninstall`, dann der Ordner `%ProgramData%\opensecagent`. Fehler von Dienst und Anmeldung zeigt Setup mit
+      der Ausgabe des Programms (stille Installation: nur im Setup-Log).
+    - Dialog `enroll-dialog` unter Windows (`src/windialog.rs`): Aufgabendialoge (`TaskDialogIndirect`) ohne
+      Eingabefeld; der Code kommt aus der Zwischenablage (in opensecmon „Kopieren“, dann „Anmelden“), der Text folgt
+      der Zwischenablage, solange der Dialog offen ist. Anmeldung in einem Thread mit Fortschrittsbalken, Fehler in
+      der Sprache von Windows mit „Noch einmal versuchen“. Texte gemeinsam mit dem Linux-Dialog (`src/texts.rs`).
+    - `opensecagent-enroll.exe` (`src/bin/`): Fensterprogramm, das per Manifest Administratorrechte verlangt und
+      `opensecagent.exe enroll-dialog` ohne Konsolenfenster startet. Manifest beider Programme
+      (`packaging/windows/opensecagent.manifest`: Common Controls 6, DPI) über `build.rs`.
+    - Test-Installer `opensecagent-0.1.2-x64-setup.exe` gebaut und signiert, beide Programme und Setup mit
+      `signtool verify` geprüft; Dialog und `--code-file` ohne Netz kurz ausprobiert (51 Tests unter Windows).
+      **Offen:** Installation, Anmeldung, Update und Deinstallation durch den Nutzer.
 - **3f Prüfen:** Test-Instanz in WSL (`docs/windows.md` Abschnitt 5), saubere Windows-Umgebung für den Installer,
   dann Installation auf dem eigenen Windows-Rechner durch den Nutzer (Wechsel vom Skript auf opensecagent mit
   „Neuen Code erzeugen“, damit der Rechner derselbe Eintrag bleibt). Danach README, CHANGELOG, Version.
