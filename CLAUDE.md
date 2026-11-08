@@ -58,6 +58,8 @@ Updates auf Knopfdruck, Download der Pakete, 15-Minuten-Takt; was der Agent daf�
   `src/dialog.rs` (Anmeldedialog, zenity/kdialog, pkexec), `src/legacy.rs` (altes Skript entfernen).
 - **Windows:** Einrichten des Windows-Rechners, Test-Instanz von opensecmon in WSL, Installer und Signatur in
   `docs/windows.md`. Windows-Code hinter `#[cfg(windows)]`, die Linux-Fassung muss unverändert bauen (CI prüft beides).
+  Installer: `dev/build-installer.ps1 [-CertSha1 <Fingerabdruck>]` mit `packaging/windows/opensecagent.iss`, Ergebnis
+  `target\installer\opensecagent-<version>-x64-setup.exe`; nur auf Auftrag bauen. Icon neu mit `dev/make-ico.ps1`.
 - **Paket:** `dev/deb.sh` (cargo-deb, musl) mit den Dateien aus `packaging/linux/` (Dienst, polkit, Startmenü,
   Symbol, `deb/postrm`); nur auf Auftrag bauen. Ergebnis `target/x86_64-unknown-linux-musl/debian/`.
   Installationstest im Container mit systemd: Image `opensecagent-debtest` (`debian:trixie` plus `systemd`,

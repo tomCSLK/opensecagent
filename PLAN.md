@@ -379,6 +379,14 @@ Vorschlag in Schritten, je mit Tests, Commit und Bericht:
   Anwendersprache (Deutsch/Englisch); Deinstallation entfernt Dienst und Anmeldung. Programm mit Icon und
   Versionsangaben (`winresource` als Build-Abhängigkeit, wie openpacketmon). `/VERYSILENT` muss für Phase 4 gehen.
   Startmenü-Eintrag für eine spätere Neuanmeldung.
+  - **Erste Stufe erledigt (2026-11-08, „go“ des Nutzers: zuerst 3e als Probelauf der Signatur):**
+    `packaging/windows/opensecagent.iss` (für alle Benutzer nach `Program Files`, nur Programm, Lizenzen und README;
+    noch ohne Dienst, Code-Feld und Startmenü), `dev/build-installer.ps1` (Bau, Lizenzliste, Inno Setup; mit
+    `-CertSha1` signiert es `opensecagent.exe`, Installer, Deinstaller und die temporären Kopien von Setup mit
+    Zeitstempel von Certum und prüft die Signaturen), `build.rs` mit `winresource` (Icon, Versionsangaben),
+    `dev/make-ico.ps1` (Icon aus dem SVG über Edge), C-Laufzeit statisch (`.cargo/config.toml`). Probe-Installer
+    `opensecagent-0.1.2-x64-setup.exe` gebaut und mit dem Certum-Zertifikat signiert, `signtool verify /pa`
+    erfolgreich; Installation mit Smart App Control macht der Nutzer.
 - **3f Prüfen:** Test-Instanz in WSL (`docs/windows.md` Abschnitt 5), saubere Windows-Umgebung für den Installer,
   dann Installation auf dem eigenen Windows-Rechner durch den Nutzer (Wechsel vom Skript auf opensecagent mit
   „Neuen Code erzeugen“, damit der Rechner derselbe Eintrag bleibt). Danach README, CHANGELOG, Version.

@@ -27,3 +27,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   in opensecmon); homes on network file systems are named in the journal and left out.
 - `status` also shows an error from before sending (the inventory could not be read) as the last error.
 - Debian package files: hardened systemd service, polkit action, start menu entry and icon (`dev/deb.sh`).
+- Windows installer (Inno Setup, `dev/build-installer.ps1`), signed with Authenticode; for now it only installs the
+  program, the service and the enrollment follow. Icon and version information in `opensecagent.exe`, the C
+  runtime is linked in statically.

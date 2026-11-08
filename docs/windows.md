@@ -80,7 +80,10 @@ Alle fünf müssen grün sein, bevor die Arbeit beginnt (die CI prüft dasselbe 
 **Smart App Control** (falls an) blockiert ab und zu frisch gebaute, unsignierte Dateien in `target\`, auch Tests und
 Build-Skripte von Abhängigkeiten („Eine Anwendungssteuerungsrichtlinie hat diese Datei blockiert“, Fehler 4551).
 Abhilfe aus openpacketmon: den betroffenen Ordner unter `target\…\build\` löschen oder neu linken (Zeitstempel von
-`src/main.rs` ändern), dann noch einmal bauen.
+`src/main.rs` ändern), dann noch einmal bauen. Seit 2026-11-08 blockiert es hier auch `cargo fmt` (`cargo-fmt.exe` der
+Toolchain ist unsigniert) und das selbst gebaute `cargo-deny.exe`. Ersatz für `cargo fmt --check`:
+`& (rustup which rustfmt) --check --edition 2024 build.rs src\main.rs` (prüft das ganze Crate); `cargo deny` prüft die
+CI bei jedem Push, oder in WSL.
 
 Die Linux-Fassung muss unverändert weiter bauen: Windows-Code hinter `#[cfg(windows)]`, Linux-Code hinter
 `#[cfg(target_os = "linux")]`. Die CI prüft beides bei jedem Push. Linux-Tests lassen sich unter Windows nicht
@@ -134,11 +137,21 @@ Nutzer (Arbeitsregel in `CLAUDE.md`), Claude liest nur die Ergebnisse.
 
 Ablauf (entschieden 2026-11-07, `PLAN.md` „Entschieden“ Punkte 6 und 8):
 
-1. Auf dem Windows-Rechner `cargo build --release` und den Installer mit Inno Setup bauen (Skript und
-   `dev/build-installer.ps1` entstehen in Phase 3); Name `opensecagent-<version>-x64-setup.exe`, wie ihn opensecmon
-   erwartet (`docs/agent-api.md`, „Updates of opensecagent“). Nur auf Auftrag.
-2. Später, sobald es das Zertifikat gibt: Authenticode-Signatur (Certum Open Source) auf dem Windows-Rechner. Sie muss
-   **vor** der eigenen Signatur kommen, weil sie die Datei verändert.
+1. Auf dem Windows-Rechner bauen und mit Authenticode signieren, in einem Schritt (nur auf Auftrag):
+   `powershell -ExecutionPolicy Bypass -File dev\build-installer.ps1 -CertSha1 <Fingerabdruck>` (oder Variable
+   `OPENSECAGENT_SIGN_SHA1`). Ergebnis `target\installer\opensecagent-<version>-x64-setup.exe`, der Name, den
+   opensecmon erwartet (`docs/agent-api.md`, „Updates of opensecagent“). Das Skript signiert `opensecagent.exe` vor dem
+   Verpacken; Inno Setup signiert Installer, Deinstaller und die temporären Kopien, die Setup beim Start entpackt
+   (`SignTool`, `SignedUninstaller`). Alle mit SHA-256 und Zeitstempel von Certum (`http://time.certum.pl`), damit die
+   Signatur auch nach Ablauf des Zertifikats gültig bleibt; danach `signtool verify /pa /all`. Die Authenticode-Signatur
+   muss **vor** der eigenen Signatur kommen, weil sie die Datei verändert.
+   - Zertifikat: Certum „Open Source Code Signing in the Cloud“ (seit 2026-11 ausgestellt, ein Jahr gültig).
+     SimplySign Desktop muss verbunden sein (Anmeldung mit einem Code aus der SimplySign-App), dann liegt das
+     Zertifikat im Speicher des Benutzers. Fingerabdruck:
+     `Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Format-List Subject, Thumbprint, NotAfter`.
+   - `signtool.exe` kommt mit dem Windows SDK; das Skript sucht es selbst, `PATH` ist nicht nötig.
+   - Blockiert Smart App Control beim Bauen eine Datei unter `target\` (Abschnitt 4), den genannten Ordner löschen und
+     das Skript noch einmal starten.
 3. Die fertige `setup.exe` auf den Linux-Laptop holen (z. B. als Anhang eines Entwurfs-Releases, über das NAS oder
    einen USB-Stick) und dort vom Nutzer mit dem Herausgeber-Schlüssel signieren:
    `ssh-keygen -Y sign -f <Schlüssel> -n opensecagent opensecagent-<version>-x64-setup.exe` (ergibt `.sig`).
@@ -147,7 +160,9 @@ Ablauf (entschieden 2026-11-07, `PLAN.md` „Entschieden“ Punkte 6 und 8):
    opensecmon-Paket zu den Anwendern.
 
 Ohne Authenticode-Signatur warnt SmartScreen, und Smart App Control kann den Installer ganz blockieren; für eigene
-Tests reicht die unsignierte Fassung (Smart App Control aus oder Testrechner ohne).
+Tests reicht die unsignierte Fassung (Smart App Control aus oder Testrechner ohne). Mit Signatur kann SmartScreen
+anfangs trotzdem warnen, bis der Installer genug Reputation hat; Smart App Control lässt Dateien mit gültiger
+Signatur einer vertrauenswürdigen Zertifizierungsstelle laufen.
 
 ## 7. Zurück auf den Linux-Laptop
 
