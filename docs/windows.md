@@ -5,8 +5,9 @@ und dort die Windows-Fassung (Phase 3 in `PLAN.md`) zu bauen, zu testen und als 
 tun ist, steht in `PLAN.md` im Abschnitt „Phase 3: Windows (Plan)“; diese Datei ist die Anleitung für den Rechner.
 
 **Heutiger Stand:** Unter Windows bauen das Programm und die Tests schon (CI-Job `windows-2025`, clippy und
-`cargo test` grün). Es kann sich anmelden und melden, aber das Inventar sagt unter Windows nur „the Windows inventory
-comes with a later version“; Dienst, Installer und Anmeldung über den Installer fehlen. Bis dahin melden sich
+`cargo test` grün). Es kann sich anmelden und melden, das Inventar liest Windows-Version, Programme und Store-Apps
+(Phase 3a); der signierte Installer installiert bisher nur das Programm. Dienst, Programme nicht angemeldeter
+Benutzer und Anmeldung über den Installer fehlen. Bis dahin melden sich
 Windows-Rechner mit dem PowerShell-Skript aus opensecmon (`contrib/opensecmon-agent.ps1`), das zugleich die Vorlage
 für das Inventar ist.
 

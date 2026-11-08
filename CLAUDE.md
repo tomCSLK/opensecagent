@@ -54,7 +54,8 @@ Updates auf Knopfdruck, Download der Pakete, 15-Minuten-Takt; was der Agent daf�
   einer Attrappe von opensecmon über HTTPS in `src/agent/tests.rs`), `src/api.rs` (Formate und Fehler der API),
   `src/http.rs` (HTTPS: Fingerabdruck oder Zertifikatsspeicher des Systems), `src/code.rs` (Anmeldecode),
   `src/store.rs` (Dateien des Agenten), `src/inventory/` (`mod.rs` Formate, `linux.rs` os-release, Kernel,
-  Neustart, Pro, dpkg, `snap.rs`, `flatpak.rs` aus den Installationsordnern), `src/service.rs` (Dienst `run`),
+  Neustart, Pro, dpkg, `snap.rs`, `flatpak.rs` aus den Installationsordnern, `windows.rs` Windows-Version,
+  Uninstall-Einträge, PEP-514-Pythons, Store-Apps), `src/service.rs` (Dienst `run`),
   `src/dialog.rs` (Anmeldedialog, zenity/kdialog, pkexec), `src/legacy.rs` (altes Skript entfernen).
 - **Windows:** Einrichten des Windows-Rechners, Test-Instanz von opensecmon in WSL, Installer und Signatur in
   `docs/windows.md`. Windows-Code hinter `#[cfg(windows)]`, die Linux-Fassung muss unverändert bauen (CI prüft beides).

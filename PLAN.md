@@ -359,6 +359,17 @@ Vorschlag in Schritten, je mit Tests, Commit und Bericht:
     (`Software\Python\<Firma>\<Tag>`, Maschine und Benutzer).
   - Grenzen wie unter Linux (`field`, Höchstzahlen); Registry-Werte sind Daten.
   - Tests mit nachgebauten Werten (die Lesefunktionen bekommen eine Quelle, die sich im Test ersetzen lässt).
+  - **Erledigt (2026-11-08, „go“ des Nutzers):** `src/inventory/windows.rs` mit `windows-registry` (Registry) und
+    `windows` (`PackageManager` für die Store-Apps, offene Frage 1 damit entschieden: API statt PowerShell), beide von
+    Microsoft, MIT/Apache-2.0. Registry hinter einem Trait, Tests mit nachgebauter Registry. Pythons nur aus
+    `PythonCore` (andere Firmen wie Anaconda haben einen eigenen Uninstall-Eintrag) und nur ohne Uninstall-Eintrag
+    „Python <Version> …“, als `win` mit der ID `Python\PythonCore\<Tag>`. Store-Apps: ohne Administratorrechte nur
+    die des eigenen Benutzers mit Hinweis auf stderr (der Dienst läuft als SYSTEM). Herausgeber mit Komma in
+    Anführungszeichen (`CN="Anthropic, PBC"`) werden richtig gelesen (das Skript machte `"Anthropic` daraus). Nicht
+    lesbare Benutzer-Hives werden ausgelassen und ohne SID genannt. Auf dem Windows-Rechner mit dem Skript verglichen:
+    Windows-Version und alle 59 Programme gleich, Store-Apps des Benutzers gleich wie `Get-AppxPackage` (101);
+    41 Tests unter Windows. Offen: In `docs/agent-api.md` von opensecmon steht für `win` nur „Uninstall-Eintrag“; die
+    PEP-514-Pythons dort nachtragen (opensecmon nimmt sie schon an, Regel „Python“ greift über den Namen).
 - **3b Benutzer ohne Anmeldung:** `NTUSER.DAT` nicht angemeldeter Benutzer (Profile aus
   `HKLM\…\ProfileList`) **nur als Datei lesen, nicht einhängen** (Entschieden, Punkt 2). Datei mit
   Freigabe-Modus öffnen, der Windows nicht stört; Hive-Format selbst lesen (nur Schlüssel und Zeichenkettenwerte unter
@@ -386,7 +397,8 @@ Vorschlag in Schritten, je mit Tests, Commit und Bericht:
     Zeitstempel von Certum und prüft die Signaturen), `build.rs` mit `winresource` (Icon, Versionsangaben),
     `dev/make-ico.ps1` (Icon aus dem SVG über Edge), C-Laufzeit statisch (`.cargo/config.toml`). Probe-Installer
     `opensecagent-0.1.2-x64-setup.exe` gebaut und mit dem Certum-Zertifikat signiert, `signtool verify /pa`
-    erfolgreich; Installation mit Smart App Control macht der Nutzer.
+    erfolgreich. Vom Nutzer installiert (2026-11-08): Smart App Control ließ ihn durch, UAC zeigte „Verifizierter
+    Herausgeber“. Die Signatur ist damit geklärt.
 - **3f Prüfen:** Test-Instanz in WSL (`docs/windows.md` Abschnitt 5), saubere Windows-Umgebung für den Installer,
   dann Installation auf dem eigenen Windows-Rechner durch den Nutzer (Wechsel vom Skript auf opensecagent mit
   „Neuen Code erzeugen“, damit der Rechner derselbe Eintrag bleibt). Danach README, CHANGELOG, Version.
