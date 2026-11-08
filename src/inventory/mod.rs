@@ -1,7 +1,8 @@
 //! What the computer has installed, in the form of the JSON report of the agent API.
 //!
 //! On Debian, Ubuntu and systems based on them: `/etc/os-release`, the running kernel, a pending reboot, Ubuntu
-//! Pro, the package list of dpkg, the snaps and the Flatpak apps of the system and of every user. Windows follows.
+//! Pro, the package list of dpkg, the snaps and the Flatpak apps of the system and of every user. On Windows: the
+//! version of Windows, the installed programs and the store apps (`windows.rs`).
 
 use serde::Serialize;
 
@@ -11,6 +12,8 @@ mod flatpak;
 mod linux;
 #[cfg(target_os = "linux")]
 mod snap;
+#[cfg(windows)]
+mod windows;
 
 /// The system, as `os` of the report.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -68,13 +71,12 @@ pub struct Inventory {
 #[derive(Debug, thiserror::Error)]
 pub enum InventoryError {
     #[error("this system is not supported yet: {0}")]
-    #[cfg_attr(target_os = "linux", allow(dead_code, reason = "Windows and others"))]
+    #[cfg_attr(
+        any(target_os = "linux", windows),
+        allow(dead_code, reason = "other systems")
+    )]
     Unsupported(&'static str),
     #[error("{0} could not be read: {1}")]
-    #[cfg_attr(
-        not(target_os = "linux"),
-        allow(dead_code, reason = "used by the Windows inventory later")
-    )]
     Read(&'static str, String),
 }
 
@@ -83,9 +85,7 @@ pub fn collect() -> Result<Inventory, InventoryError> {
     #[cfg(target_os = "linux")]
     return linux::collect();
     #[cfg(windows)]
-    return Err(InventoryError::Unsupported(
-        "the Windows inventory comes with a later version",
-    ));
+    return windows::collect();
     #[cfg(not(any(target_os = "linux", windows)))]
     return Err(InventoryError::Unsupported(
         "only Linux and Windows are supported",
@@ -93,10 +93,6 @@ pub fn collect() -> Result<Inventory, InventoryError> {
 }
 
 /// The items in a fixed order without duplicates, so the same software always gives the same report (and hash).
-#[cfg_attr(
-    not(target_os = "linux"),
-    allow(dead_code, reason = "used by the Windows inventory later")
-)]
 pub fn sorted(mut items: Vec<Item>) -> Vec<Item> {
     items.sort_by(|a, b| {
         (a.kind, &a.id, &a.version, &a.name, a.scope)
@@ -107,10 +103,6 @@ pub fn sorted(mut items: Vec<Item>) -> Vec<Item> {
 }
 
 /// Text from the system for a field of the report: no control characters, trimmed, at most `max` characters.
-#[cfg_attr(
-    not(target_os = "linux"),
-    allow(dead_code, reason = "used by the Windows inventory later")
-)]
 pub fn field(text: &str, max: usize) -> String {
     text.chars()
         .filter(|c| !c.is_control())

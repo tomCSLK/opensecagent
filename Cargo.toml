@@ -26,6 +26,16 @@ thiserror = "2.0.21"
 tokio = { version = "1.54.1", features = ["rt", "time", "net", "io-util", "macros", "signal"] }
 tokio-rustls = { version = "0.26.6", default-features = false, features = ["logging", "ring", "tls12"] }
 
+# Windows inventory (src/inventory/windows.rs), both from Microsoft (windows-rs): the registry with a safe API, and
+# the store apps of all users through PackageManager (WinRT) instead of parsing the output of PowerShell.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = [
+    "ApplicationModel",
+    "Foundation_Collections",
+    "Management_Deployment",
+] }
+windows-registry = "0.6.1"
+
 [dev-dependencies]
 # A stand-in for the agent API of opensecmon over HTTPS with its own certificates.
 hyper = { version = "1.12.0", features = ["server", "http1"] }
