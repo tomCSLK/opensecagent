@@ -381,6 +381,21 @@ Vorschlag in Schritten, je mit Tests, Commit und Bericht:
   Log-Datei im Ordner des Agenten. Ordner `%ProgramData%\opensecagent` mit eigener Zugriffsliste nur für SYSTEM und
   Administratoren, ohne Vererbung (setzt der Agent selbst beim Anlegen, wie `Protect-Dir` im Skript; offen aus
   Phase 1).
+  - **Erledigt (2026-11-08, „go“ des Nutzers, ohne Installer):** `src/winsvc/mod.rs` mit `windows-service` (Mullvad,
+    MIT/Apache-2.0): `run` meldet sich beim Dienst-Manager an und hält beim Stoppen oder Herunterfahren an
+    (`service::run` bekommt das Ende jetzt von außen, unter Linux weiter SIGTERM/Strg+C); ohne Dienst-Manager läuft
+    `run` im Terminal wie unter Linux. Versteckte Befehle `service-install` (Ordner sichern, Dienst anlegen oder
+    aktualisieren: LocalSystem, automatisch verzögert, Neustart nach 60 s, 60 s, 300 s auch bei Fehlerende, dann
+    starten) und `service-uninstall` (stoppen, höchstens 30 s warten, entfernen) für den Installer. Ausgaben des
+    Dienstes nach `opensecagent.log` im Ordner des Agenten (`src/log.rs`, Zeit in UTC, ab 1 MB `.old`; unter Linux
+    weiter ins Journal), Hinweise des Inventars dorthin statt auf stderr. Zugriffsliste in `src/winsvc/folder.rs`:
+    Ordner wird mit `O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)` angelegt; ein vorhandener Ordner bekommt die Liste neu
+    (Dateien erben sie), aber nur, wenn er SYSTEM oder den Administratoren gehört und kein Link ist (in `ProgramData`
+    darf jeder Benutzer Ordner anlegen); sonst startet der Dienst nicht (Fehler 1), schreibt auch kein Log dorthin.
+    Gilt nur für den Standardordner, nicht für `--dir`. Gesichert wird beim Anlegen, vor dem Speichern einer
+    Anmeldung und beim Start des Dienstes. 46 Tests unter Windows (ohne Administratorrechte; der Test für das Anlegen
+    mit Zugriffsliste prüft die Liste nur mit Administratorrechten, z. B. in der CI). Den Dienst auf diesem Rechner
+    einzurichten, bleibt beim Nutzer (`docs/windows.md` Abschnitt 5).
 - **3d Altes Skript entfernen** (`src/legacy.rs` für Windows): geplante Aufgabe `opensecmon-agent` und Ordner
   `%ProgramData%\opensecmon-agent` (wie `Invoke-Uninstall` im Skript), nur nach einer Anmeldung im Standardordner.
 - **3e Installer** (Inno Setup, `packaging/windows/`, `dev/build-installer.ps1`, nur auf Auftrag bauen): Installation

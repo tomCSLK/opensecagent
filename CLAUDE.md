@@ -55,7 +55,9 @@ Updates auf Knopfdruck, Download der Pakete, 15-Minuten-Takt; was der Agent daf�
   `src/http.rs` (HTTPS: Fingerabdruck oder Zertifikatsspeicher des Systems), `src/code.rs` (Anmeldecode),
   `src/store.rs` (Dateien des Agenten), `src/inventory/` (`mod.rs` Formate, `linux.rs` os-release, Kernel,
   Neustart, Pro, dpkg, `snap.rs`, `flatpak.rs` aus den Installationsordnern, `windows.rs` Windows-Version,
-  Uninstall-Einträge, PEP-514-Pythons, Store-Apps), `src/service.rs` (Dienst `run`),
+  Uninstall-Einträge, PEP-514-Pythons, Store-Apps), `src/service.rs` (Dienst `run`), `src/log.rs` (Zeilen des
+  Dienstes: stdout bzw. unter Windows `opensecagent.log`), `src/winsvc/` (Windows-Dienst, `service-install`/
+  `service-uninstall`, `folder.rs` Zugriffsliste des Ordners),
   `src/dialog.rs` (Anmeldedialog, zenity/kdialog, pkexec), `src/legacy.rs` (altes Skript entfernen).
 - **Windows:** Einrichten des Windows-Rechners, Test-Instanz von opensecmon in WSL, Installer und Signatur in
   `docs/windows.md`. Windows-Code hinter `#[cfg(windows)]`, die Linux-Fassung muss unverändert bauen (CI prüft beides).

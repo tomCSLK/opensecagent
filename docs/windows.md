@@ -6,8 +6,9 @@ tun ist, steht in `PLAN.md` im Abschnitt „Phase 3: Windows (Plan)“; diese Da
 
 **Heutiger Stand:** Unter Windows bauen das Programm und die Tests schon (CI-Job `windows-2025`, clippy und
 `cargo test` grün). Es kann sich anmelden und melden, das Inventar liest Windows-Version, Programme und Store-Apps
-(Phase 3a); der signierte Installer installiert bisher nur das Programm. Dienst, Programme nicht angemeldeter
-Benutzer und Anmeldung über den Installer fehlen. Bis dahin melden sich
+(Phase 3a) und läuft als Windows-Dienst (3c); der signierte Installer installiert bisher nur das Programm und richtet
+den Dienst noch nicht ein. Programme nicht angemeldeter Benutzer und Anmeldung über den Installer fehlen. Bis dahin
+melden sich
 Windows-Rechner mit dem PowerShell-Skript aus opensecmon (`contrib/opensecmon-agent.ps1`), das zugleich die Vorlage
 für das Inventar ist.
 
@@ -130,6 +131,31 @@ Assets → Rechner (Agent) einen Rechner anlegen, den Anmeldecode kopieren und m
 `cargo run -- --dir $env:TEMP\osa enroll` (Code auf der Eingabe) anmelden. Ohne Quellen gibt es keine Treffer, aber
 Anmeldung, Meldung, Kurzform, `409`, `429` und die Seite „Nicht zugeordnet“ lassen sich prüfen. Danach den Ordner
 `~/osm-test` löschen. Die Instanz nie mit `fetch_sources = true` starten (Erstimport rund 1,9 GB).
+
+**Dienst im Terminal:** `cargo run -- --dir $env:TEMP\osa run` läuft wie unter Linux im Vordergrund (Zeilen auf der
+Ausgabe, Ende mit Strg+C); ohne den Dienst-Manager fällt `run` von selbst auf diese Art zurück.
+
+**Dienst einrichten** (Administrator; auf dem eigenen Rechner macht das der Nutzer). Die versteckten Befehle
+`service-install` und `service-uninstall` sind für den Installer gedacht:
+
+```powershell
+# PowerShell als Administrator, im Ordner opensecagent
+cargo build --release
+target\release\opensecagent.exe service-install   # Ordner mit Zugriffsliste, Dienst einrichten und starten
+Get-Service opensecagent                           # Running
+sc.exe qc opensecagent                             # AUTO_START (DELAYED), LocalSystem, "...\opensecagent.exe" run
+sc.exe qfailure opensecagent                       # Neustart nach 60 s, 60 s, 300 s; Zähler nach 86400 s zurück
+icacls $env:ProgramData\opensecagent               # nur NT AUTHORITY\SYSTEM und VORDEFINIERT\Administratoren
+Get-Content $env:ProgramData\opensecagent\opensecagent.log   # "opensecagent 0.1.2 started"
+Restart-Service opensecagent                       # "stopped", dann wieder "started"
+target\release\opensecagent.exe service-uninstall  # stoppt und entfernt den Dienst; der Ordner bleibt
+```
+
+Der Dienst führt ein Log `opensecagent.log` im Ordner des Agenten (mit Zeit in UTC; ab 1 MB wird es zu
+`opensecagent.log.old`). Ohne Anmeldung schaut er jede Minute nach den Dateien und meldet nichts. Kann er den Ordner
+nicht sichern (er gehört einem anderen Benutzer oder ist ein Link), startet er nicht und endet mit dem dienstspezifischen
+Fehler 1 (`sc.exe query opensecagent`, `SERVICE_EXIT_CODE`); `service-install` nennt den Grund. Smart App Control kann
+das unsignierte `target\release\opensecagent.exe` blockieren; dann die signierte Fassung nehmen (Abschnitt 6).
 
 **Echter Test** auf dem eigenen Windows-Rechner gegen das eigene opensecmon: Installation und Anmeldung macht der
 Nutzer (Arbeitsregel in `CLAUDE.md`), Claude liest nur die Ergebnisse.

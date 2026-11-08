@@ -32,3 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Windows installer (Inno Setup, `dev/build-installer.ps1`), signed with Authenticode; for now it only installs the
   program, the service and the enrollment follow. Icon and version information in `opensecagent.exe`, the C
   runtime is linked in statically.
+- Windows service: `run` works under the service manager (LocalSystem, delayed automatic start, restarted after
+  failures) and writes its lines to `opensecagent.log` in the agent's folder; hidden commands `service-install` and
+  `service-uninstall` for the installer. The agent's folder `%ProgramData%\opensecagent` gets an access list for
+  SYSTEM and the administrators only; a folder of that name made by another user, or a link, is refused.
