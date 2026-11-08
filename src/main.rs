@@ -11,8 +11,11 @@ mod http;
 mod inventory;
 #[cfg(target_os = "linux")]
 mod legacy;
+mod log;
 mod service;
 mod store;
+#[cfg(windows)]
+mod winsvc;
 
 use std::io::{IsTerminal, Read};
 use std::path::PathBuf;
@@ -66,6 +69,14 @@ enum Command {
     EnrollDialog,
     /// Run as a service: report at the interval opensecmon asks for (started by systemd or the Windows service).
     Run,
+    /// Set up the Windows service and start it (for the installer).
+    #[cfg(windows)]
+    #[command(hide = true)]
+    ServiceInstall,
+    /// Stop and remove the Windows service (for the installer).
+    #[cfg(windows)]
+    #[command(hide = true)]
+    ServiceUninstall,
     /// Print the version.
     Version,
 }
@@ -73,7 +84,12 @@ enum Command {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let default_dir = cli.dir.is_none();
-    let store = Store::new(cli.dir.unwrap_or_else(store::default_dir));
+    let store = cli.dir.map_or_else(Store::own, Store::new);
+    // The service dispatcher blocks this thread and runs the service in another one, with its own runtime.
+    #[cfg(windows)]
+    if let Command::Run = cli.command {
+        return winsvc::run(store);
+    }
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -149,7 +165,22 @@ async fn run(command: Command, agent: Agent, default_dir: bool) -> Result<(), Er
             dialog::run().map_err(Error::Dialog)?;
             Ok(())
         }
-        Command::Run => service::run(agent).await,
+        Command::Run => service::run(agent, service::stop_signal()).await,
+        #[cfg(windows)]
+        Command::ServiceInstall => {
+            winsvc::install()?;
+            println!("The service {} is set up and running.", winsvc::NAME);
+            Ok(())
+        }
+        #[cfg(windows)]
+        Command::ServiceUninstall => {
+            if winsvc::uninstall()? {
+                println!("The service {} was removed.", winsvc::NAME);
+            } else {
+                println!("The service {} was not set up.", winsvc::NAME);
+            }
+            Ok(())
+        }
         Command::Version => {
             println!("opensecagent {}", api::AGENT_VERSION);
             Ok(())
@@ -299,6 +330,12 @@ fn duration(seconds: u64) -> String {
 
 /// Seconds since 1970 as `2026-11-08 10:15 UTC`.
 fn utc(seconds: u64) -> String {
+    let t = date_time(seconds);
+    format!("{} UTC", &t[..t.len() - 7])
+}
+
+/// Seconds since 1970 as `2026-11-08 10:15:42 UTC`.
+fn date_time(seconds: u64) -> String {
     let days = (seconds / 86_400) as i64;
     let rest = seconds % 86_400;
     // Days to the civil date (Howard Hinnant's algorithm).
@@ -312,9 +349,10 @@ fn utc(seconds: u64) -> String {
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = yoe + era * 400 + i64::from(month <= 2);
     format!(
-        "{year:04}-{month:02}-{day:02} {:02}:{:02} UTC",
+        "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02} UTC",
         rest / 3600,
-        rest % 3600 / 60
+        rest % 3600 / 60,
+        rest % 60
     )
 }
 
@@ -333,6 +371,7 @@ mod tests {
         assert_eq!(utc(0), "1970-01-01 00:00 UTC");
         assert_eq!(utc(1_762_596_900), "2025-11-08 10:15 UTC");
         assert_eq!(utc(951_825_600), "2000-02-29 12:00 UTC");
+        assert_eq!(date_time(1_762_596_942), "2025-11-08 10:15:42 UTC");
         assert_eq!(duration(30), "30 s");
         assert_eq!(duration(900), "15 min");
         assert_eq!(duration(21_600), "6 h");

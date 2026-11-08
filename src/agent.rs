@@ -54,6 +54,12 @@ pub enum Error {
     )]
     #[error("the enrollment dialog could not be shown: {0}")]
     Dialog(String),
+    #[cfg_attr(
+        not(windows),
+        allow(dead_code, reason = "only Windows has the service manager")
+    )]
+    #[error("the Windows service: {0}")]
+    Service(String),
 }
 
 fn permission_hint(e: &std::io::Error) -> &'static str {
@@ -82,7 +88,7 @@ impl Error {
             Self::Api(_) => "other",
             Self::Files(..) => "files",
             Self::Inventory(_) => "inventory",
-            Self::Dialog(_) => "other",
+            Self::Dialog(_) | Self::Service(_) => "other",
         }
     }
 }
@@ -342,7 +348,7 @@ impl Agent {
     /// The state is a convenience: if it cannot be written, the next report is simply a full one.
     fn keep_state(&self, state: &State) {
         if let Err(e) = self.store.save_state(state) {
-            eprintln!("warning: {}", self.files(e));
+            crate::log::note(format_args!("warning: {}", self.files(e)));
         }
     }
 

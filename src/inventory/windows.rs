@@ -32,8 +32,8 @@ pub fn collect() -> Result<Inventory, InventoryError> {
     items.extend(pythons);
     items.extend(store_apps(&mut notes)?);
     for note in notes {
-        // standard error: `inventory` writes the report on standard output
-        eprintln!("note: {note}");
+        // standard error (`inventory` writes the report on standard output), or the log of the service
+        crate::log::note(format_args!("note: {note}"));
     }
     let mut items = super::sorted(items);
     items.truncate(MAX_ITEMS);

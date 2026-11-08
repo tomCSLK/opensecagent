@@ -4,9 +4,10 @@
 //! - `token`: the token of this computer (secret),
 //! - `state.json`: hash and time of the last report, the interval opensecmon asked for, the last error.
 //!
-//! Linux: `/var/lib/opensecagent` (folder `700`, files `600`). Windows: `%ProgramData%\opensecagent`; the access
-//! list that keeps other users out is set by the installer (phase 3). Files are replaced through a temporary file
-//! in the same folder, so a crash never leaves half a token behind.
+//! Linux: `/var/lib/opensecagent` (folder `700`, files `600`). Windows: `%ProgramData%\opensecagent` with an access
+//! list only for SYSTEM and the administrators, without inheritance from `ProgramData` (`winsvc::folder`); the files
+//! inherit it. Files are replaced through a temporary file in the same folder, so a crash never leaves half a token
+//! behind.
 
 use std::fs;
 use std::io::{self, Write};
@@ -103,11 +104,38 @@ pub struct State {
 #[derive(Debug, Clone)]
 pub struct Store {
     dir: PathBuf,
+    /// The agent's own folder (`default_dir`), which on Windows gets its own access list. A folder named with
+    /// `--dir` is left as it is, it may be one of the user's.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    own: bool,
 }
 
 impl Store {
+    /// A folder named with `--dir` (or in tests).
     pub fn new(dir: impl Into<PathBuf>) -> Self {
-        Self { dir: dir.into() }
+        Self {
+            dir: dir.into(),
+            own: false,
+        }
+    }
+
+    /// The agent's own folder.
+    pub fn own() -> Self {
+        Self {
+            dir: default_dir(),
+            own: true,
+        }
+    }
+
+    /// Makes sure the folder exists and that only the agent can get in: on Windows the access list of the own
+    /// folder is set again (and a folder someone else made, or a link, is refused); elsewhere only the folder is
+    /// created if missing.
+    pub fn secure(&self) -> io::Result<()> {
+        #[cfg(windows)]
+        if self.own {
+            return crate::winsvc::folder::protect(&self.dir);
+        }
+        self.ensure_dir()
     }
 
     pub fn dir(&self) -> &Path {
@@ -151,7 +179,7 @@ impl Store {
 
     /// Keeps a new enrollment: token first, then the enrollment, then a fresh state.
     pub fn save_enrollment(&self, enrollment: &Enrollment, token: &Token) -> io::Result<()> {
-        self.ensure_dir()?;
+        self.secure()?;
         self.write(TOKEN, format!("{}\n", token.expose()).as_bytes())?;
         self.write(ENROLLMENT, &to_json(enrollment))?;
         self.save_state(&State::default())
@@ -194,6 +222,10 @@ impl Store {
     fn ensure_dir(&self) -> io::Result<()> {
         if self.dir.is_dir() {
             return Ok(());
+        }
+        #[cfg(windows)]
+        if self.own {
+            return crate::winsvc::folder::protect(&self.dir);
         }
         let mut builder = fs::DirBuilder::new();
         builder.recursive(true);

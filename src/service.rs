@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use crate::agent::{self, Agent, Error};
 use crate::api::ApiError;
-use crate::inventory;
+use crate::{inventory, log};
 
 /// How often the files are looked at while the computer is not enrolled or was revoked (no network).
 const IDLE_S: u64 = 60;
@@ -37,12 +37,14 @@ enum Round {
     Failed,
 }
 
-/// Runs until the service manager asks it to stop.
-pub async fn run(agent: Agent) -> Result<(), Error> {
-    println!("opensecagent {} started", crate::api::AGENT_VERSION);
+/// Runs until `stop` finishes (the service manager asks the service to stop).
+pub async fn run(agent: Agent, stop: impl Future<Output = ()>) -> Result<(), Error> {
+    log::line(format_args!(
+        "opensecagent {} started",
+        crate::api::AGENT_VERSION
+    ));
     let mut failures = 0usize;
     let mut first = true;
-    let stop = stop_signal();
     tokio::pin!(stop);
     loop {
         let round = if first {
@@ -64,7 +66,7 @@ pub async fn run(agent: Agent) -> Result<(), Error> {
         tokio::select! {
             () = tokio::time::sleep(Duration::from_secs(wait)) => {}
             () = &mut stop => {
-                println!("opensecagent stopped");
+                log::line(format_args!("opensecagent stopped"));
                 return Ok(());
             }
         }
@@ -93,7 +95,9 @@ async fn round(agent: &Agent) -> Round {
         Ok(i) => i,
         Err(e) => {
             let e = Error::Inventory(e);
-            println!("the inventory could not be read, the report waits: {e}");
+            log::line(format_args!(
+                "the inventory could not be read, the report waits: {e}"
+            ));
             agent.note_error(&e);
             return Round::Failed;
         }
@@ -101,30 +105,36 @@ async fn round(agent: &Agent) -> Round {
     match agent.report(&inventory, false).await {
         Ok(r) => {
             if r.short {
-                println!("inventory unchanged (sent its hash)");
+                log::line(format_args!("inventory unchanged (sent its hash)"));
             } else {
-                println!("inventory sent ({} KB)", r.size.div_ceil(1024));
+                log::line(format_args!(
+                    "inventory sent ({} KB)",
+                    r.size.div_ceil(1024)
+                ));
             }
             for w in &r.warnings {
-                println!("opensecmon skipped {} entries ({})", w.count, w.code);
+                log::line(format_args!(
+                    "opensecmon skipped {} entries ({})",
+                    w.count, w.code
+                ));
             }
             Round::Reported(r.next_report_s)
         }
         Err(Error::NotEnrolled) => Round::Idle,
         Err(e @ Error::Revoked) => {
-            println!("{e}");
+            log::line(format_args!("{e}"));
             Round::Idle
         }
         Err(Error::Wait(s)) => {
-            println!("opensecmon asks to wait {s} s");
+            log::line(format_args!("opensecmon asks to wait {s} s"));
             Round::Wait(s)
         }
         Err(e @ Error::Api(ApiError::Http(_))) => {
-            println!("opensecmon could not be reached: {e}");
+            log::line(format_args!("opensecmon could not be reached: {e}"));
             Round::Failed
         }
         Err(e) => {
-            println!("the report did not work: {e}");
+            log::line(format_args!("the report did not work: {e}"));
             Round::Failed
         }
     }
@@ -156,8 +166,9 @@ fn random() -> u64 {
     h.finish()
 }
 
-/// Finishes when the service manager stops the service (SIGTERM, or Ctrl+C in a terminal).
-async fn stop_signal() {
+/// Finishes on SIGTERM from systemd, or on Ctrl+C in a terminal (also on Windows, where the service manager has
+/// its own way, see `winsvc`).
+pub async fn stop_signal() {
     #[cfg(unix)]
     {
         use tokio::signal::unix::{SignalKind, signal};
