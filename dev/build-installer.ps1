@@ -1,7 +1,8 @@
 # Builds the installer for Windows: target\installer\opensecagent-<version>-x64-setup.exe
 #
-# Builds opensecagent in release mode with the version from Cargo.toml, checks the list of third-party licenses and
-# calls the compiler of Inno Setup 6 (packaging\windows\opensecagent.iss). Only on request (CLAUDE.md); raise the
+# Builds opensecagent and opensecagent-enroll (the start-menu entry) in release mode with the version from
+# Cargo.toml, checks the list of third-party licenses and calls the compiler of Inno Setup 6
+# (packaging\windows\opensecagent.iss). Only on request (CLAUDE.md); raise the
 # version in Cargo.toml first, as for the .deb.
 #
 # Needs: Rust with the MSVC tool chain, Python 3 and Inno Setup 6 (winget install JRSoftware.InnoSetup).
@@ -9,7 +10,7 @@
 #     powershell -ExecutionPolicy Bypass -File dev\build-installer.ps1
 #
 # Signing (docs/windows.md, section 6): with the thumbprint (SHA-1) of the code signing certificate, given as
-# -CertSha1 or in the variable OPENSECAGENT_SIGN_SHA1, it signs opensecagent.exe, the installer, the uninstaller and
+# -CertSha1 or in the variable OPENSECAGENT_SIGN_SHA1, it signs both programs, the installer, the uninstaller and
 # the temporary copies Setup starts with signtool of the Windows SDK, SHA-256 and a time stamp, and checks the
 # signatures. The certificate must be in the certificate store of the user; with Certum in the cloud, SimplySign
 # Desktop has to be connected. Without a thumbprint the installer stays unsigned, and the script says so.
@@ -88,10 +89,10 @@ if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
 python -I dev\third-party-licenses.py --check
 if ($LASTEXITCODE -ne 0) { throw 'THIRD-PARTY-LICENSES.txt is out of date: python -I dev\third-party-licenses.py' }
 
-$program = 'target\release\opensecagent.exe'
+$programs = @('target\release\opensecagent.exe', 'target\release\opensecagent-enroll.exe')
 $isccArgs = @('/Qp', "/DAppVersion=$version")
 if ($sign) {
-    Invoke-Sign @($program)
+    Invoke-Sign $programs
     # Inno Setup signs the installer, the uninstaller and its temporary copies with this command; it replaces $q by a
     # quote and $f by the file
     $isccArgs += '/DSign'
@@ -106,7 +107,7 @@ $hash = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLower()
 Write-Host ''
 Write-Host "Installer: $setup"
 if ($sign) {
-    foreach ($file in @($program, $setup)) { Test-Signature $file }
+    foreach ($file in $programs + $setup) { Test-Signature $file }
 }
 Write-Host "SHA-256:   $hash"
 if ($sign) {

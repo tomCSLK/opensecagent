@@ -7,6 +7,14 @@ authors = ["Thomas Cieslik"]
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/tomCSLK/opensecagent"
 publish = false
+# src/bin/opensecagent-enroll.rs is only the start-menu entry for the dialog on Windows.
+default-run = "opensecagent"
+
+[[bin]]
+name = "opensecagent-enroll"
+path = "src/bin/opensecagent-enroll.rs"
+# Its manifest asks for administrator rights, which would also apply to its (empty) test program.
+test = false
 
 [dependencies]
 clap = { version = "4.6.7", features = ["derive", "env"] }
@@ -28,16 +36,23 @@ tokio-rustls = { version = "0.26.6", default-features = false, features = ["logg
 
 # Windows inventory (src/inventory/windows.rs), both from Microsoft (windows-rs): the registry with a safe API, and
 # the store apps of all users through PackageManager (WinRT) instead of parsing the output of PowerShell. The Win32
-# security functions set the access list of the agent's folder (src/winsvc/folder.rs).
+# security functions set the access list of the agent's folder (src/winsvc/folder.rs); task dialogs, clipboard,
+# language and elevation are for the enrollment dialog (src/windialog.rs).
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = [
     "ApplicationModel",
     "Foundation_Collections",
     "Management_Deployment",
     "Win32_Foundation",
+    "Win32_Globalization",
     "Win32_Security",
     "Win32_Security_Authorization",
     "Win32_Storage_FileSystem",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+    "Win32_UI_Controls",
+    "Win32_UI_WindowsAndMessaging",
 ] }
 windows-registry = "0.6.1"
 # The Windows service (src/winsvc/): talks to the service manager and sets the service up. From Mullvad, the

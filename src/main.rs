@@ -11,9 +11,16 @@ mod http;
 mod inventory;
 #[cfg(target_os = "linux")]
 mod legacy;
+#[cfg(windows)]
+#[path = "legacy_windows.rs"]
+mod legacy;
 mod log;
 mod service;
 mod store;
+#[cfg(any(target_os = "linux", windows))]
+mod texts;
+#[cfg(windows)]
+mod windialog;
 #[cfg(windows)]
 mod winsvc;
 
@@ -49,6 +56,9 @@ enum Command {
         /// Answer with one line of JSON, for the enrollment dialog.
         #[arg(long, hide = true)]
         for_dialog: bool,
+        /// Read the code from this file and delete it (for the installer).
+        #[arg(long, hide = true, value_name = "FILE", conflicts_with = "code")]
+        code_file: Option<PathBuf>,
     },
     /// Send the inventory now.
     Report {
@@ -64,8 +74,8 @@ enum Command {
     /// is deleted there.
     Uninstall,
     /// Show the enrollment dialog (from the start menu): takes the code from the clipboard or asks for it, then
-    /// enrolls through pkexec.
-    #[cfg(target_os = "linux")]
+    /// enrolls (Linux: through pkexec; Windows: as administrator, started by opensecagent-enroll.exe).
+    #[cfg(any(target_os = "linux", windows))]
     EnrollDialog,
     /// Run as a service: report at the interval opensecmon asks for (started by systemd or the Windows service).
     Run,
@@ -103,9 +113,21 @@ fn main() -> ExitCode {
     if let Command::Enroll {
         code,
         for_dialog: true,
+        code_file,
     } = cli.command
     {
-        return runtime.block_on(enroll_for_dialog(code, Agent::new(store), default_dir));
+        return runtime.block_on(enroll_for_dialog(
+            code,
+            code_file,
+            Agent::new(store),
+            default_dir,
+        ));
+    }
+    // The Windows dialog runs its own runtime in a thread while the window waits.
+    #[cfg(windows)]
+    if let Command::EnrollDialog = cli.command {
+        drop(runtime);
+        return windialog::run(store, default_dir);
     }
     match runtime.block_on(run(cli.command, Agent::new(store), default_dir)) {
         Ok(()) => ExitCode::SUCCESS,
@@ -118,11 +140,10 @@ fn main() -> ExitCode {
 
 async fn run(command: Command, agent: Agent, default_dir: bool) -> Result<(), Error> {
     match command {
-        Command::Enroll { code, .. } => {
-            let code = match code {
-                Some(code) => code,
-                None => read_code()?,
-            };
+        Command::Enroll {
+            code, code_file, ..
+        } => {
+            let code = get_code(code, code_file)?;
             let enrolled = agent.enroll(&code, &inventory::hostname()).await?;
             println!(
                 "Enrolled as \"{}\" with opensecmon at {}.",
@@ -165,6 +186,9 @@ async fn run(command: Command, agent: Agent, default_dir: bool) -> Result<(), Er
             dialog::run().map_err(Error::Dialog)?;
             Ok(())
         }
+        // Handled in `main`.
+        #[cfg(windows)]
+        Command::EnrollDialog => Ok(()),
         Command::Run => service::run(agent, service::stop_signal()).await,
         #[cfg(windows)]
         Command::ServiceInstall => {
@@ -188,32 +212,54 @@ async fn run(command: Command, agent: Agent, default_dir: bool) -> Result<(), Er
     }
 }
 
+/// What an enrollment from a dialog came to.
+struct DialogEnrollment {
+    device: String,
+    address: String,
+    old_script_removed: bool,
+    first_report: bool,
+}
+
+/// Enrolls, removes the old script and sends the first report, quietly (nothing on standard output).
+async fn enroll_quietly(
+    code: &str,
+    agent: &Agent,
+    default_dir: bool,
+) -> Result<DialogEnrollment, Error> {
+    let enrolled = agent.enroll(code, &inventory::hostname()).await?;
+    let removed = remove_old_script(default_dir);
+    let first_report = match collect(agent) {
+        Ok(inventory) => agent.report(&inventory, false).await.is_ok(),
+        Err(_) => false,
+    };
+    Ok(DialogEnrollment {
+        device: enrolled.device,
+        address: enrolled.address,
+        old_script_removed: !removed.is_empty(),
+        first_report,
+    })
+}
+
 /// The enrollment for the dialog: one line of JSON on standard output, the exit code tells success.
-async fn enroll_for_dialog(code: Option<String>, agent: Agent, default_dir: bool) -> ExitCode {
+async fn enroll_for_dialog(
+    code: Option<String>,
+    code_file: Option<PathBuf>,
+    agent: Agent,
+    default_dir: bool,
+) -> ExitCode {
     let result = async {
-        let code = match code {
-            Some(code) => code,
-            None => read_code()?,
-        };
-        agent.enroll(&code, &inventory::hostname()).await
+        let code = get_code(code, code_file)?;
+        enroll_quietly(&code, &agent, default_dir).await
     }
     .await;
     let line = match result {
-        Ok(enrolled) => {
-            let removed = remove_old_script(default_dir);
-            // Quietly: standard output carries only the JSON line.
-            let first_report = match collect(&agent) {
-                Ok(inventory) => agent.report(&inventory, false).await.is_ok(),
-                Err(_) => false,
-            };
-            serde_json::json!({
-                "ok": true,
-                "device": enrolled.device,
-                "address": enrolled.address,
-                "old_script_removed": !removed.is_empty(),
-                "first_report": first_report,
-            })
-        }
+        Ok(e) => serde_json::json!({
+            "ok": true,
+            "device": e.device,
+            "address": e.address,
+            "old_script_removed": e.old_script_removed,
+            "first_report": e.first_report,
+        }),
         Err(e) => serde_json::json!({
             "ok": false,
             "error": e.kind(),
@@ -230,18 +276,38 @@ async fn enroll_for_dialog(code: Option<String>, agent: Agent, default_dir: bool
 }
 
 /// After an enrollment in the agent's own folder: removes the script opensecmon offered before, so the computer
-/// does not report twice. Only on Linux; a failure is only a warning.
+/// does not report twice. A failure is only a warning.
 fn remove_old_script(default_dir: bool) -> Vec<PathBuf> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", windows))]
     if default_dir {
-        match legacy::remove_old_script(std::path::Path::new("/")) {
+        match legacy::remove_old_script(&legacy::root()) {
             Ok(removed) => return removed.paths,
-            Err(e) => eprintln!("warning: the old agent script could not be removed: {e}"),
+            Err(e) => log::note(format_args!(
+                "warning: the old agent script could not be removed: {e}"
+            )),
         }
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", windows)))]
     let _ = default_dir;
     Vec::new()
+}
+
+/// The code from the command line, from a file (deleted afterwards, also when it cannot be read), or from standard
+/// input.
+fn get_code(code: Option<String>, code_file: Option<PathBuf>) -> Result<String, Error> {
+    if let Some(code) = code {
+        return Ok(code);
+    }
+    let Some(path) = code_file else {
+        return read_code();
+    };
+    let text = std::fs::File::open(&path).and_then(|f| {
+        let mut text = String::new();
+        f.take(4096).read_to_string(&mut text)?;
+        Ok(text)
+    });
+    let _ = std::fs::remove_file(&path);
+    text.map_err(|e| Error::Files(path, e))
 }
 
 /// The inventory for a report; if it cannot be read, that is kept as the last error for `status`.

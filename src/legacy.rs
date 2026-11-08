@@ -17,6 +17,11 @@ pub struct Removed {
     pub paths: Vec<PathBuf>,
 }
 
+/// The root of the real system.
+pub fn root() -> PathBuf {
+    PathBuf::from("/")
+}
+
 /// Removes the script below `root` (`/` on a real system; systemd is only asked there). Paths that are not there
 /// are skipped; the first one that cannot be removed ends it with an error.
 pub fn remove_old_script(root: &Path) -> io::Result<Removed> {

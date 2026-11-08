@@ -10,6 +10,7 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
 
 use crate::code;
+use crate::texts::{self, Lang, Text, offered_code, plain};
 
 /// The code is about 100 characters; anything much longer in the clipboard is something else.
 const CLIPBOARD_MAX: u64 = 4096;
@@ -17,12 +18,6 @@ const CLIPBOARD_MAX: u64 = 4096;
 const CLIPBOARD_TIMEOUT: Duration = Duration::from_secs(3);
 /// The answer of `opensecagent enroll --for-dialog` is one short line.
 const ANSWER_MAX: u64 = 64 * 1024;
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Lang {
-    De,
-    En,
-}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Toolkit {
@@ -222,13 +217,6 @@ fn installed(program: &str) -> bool {
         .is_some_and(|path| std::env::split_paths(&path).any(|dir| dir.join(program).is_file()))
 }
 
-/// The code from the clipboard and the address of its opensecmon, if the clipboard holds a valid code.
-fn offered_code(clipboard: Option<String>) -> Option<(String, String)> {
-    let text = clipboard?;
-    let address = code::decode(&text).ok()?.address;
-    Some((text, address))
-}
-
 /// A code from the clipboard, if one of the clipboard tools is installed and it holds one.
 fn clipboard_code() -> Option<String> {
     let wayland = std::env::var_os("WAYLAND_DISPLAY").is_some();
@@ -286,39 +274,11 @@ fn read_with_timeout(program: &str, args: &[&str]) -> Option<String> {
         .then(|| String::from_utf8_lossy(&bytes).into_owned())
 }
 
-/// Text from outside (server messages, names) without control characters and without `<` and `>`, which kdialog
-/// would take as markup.
-fn plain(s: &str) -> String {
-    s.chars()
-        .filter(|c| !c.is_control() || *c == '\n')
-        .filter(|c| !matches!(c, '<' | '>'))
-        .take(500)
-        .collect()
-}
-
 /// zenity reads the texts as Pango markup.
 fn pango(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
-}
-
-#[derive(Clone, Copy)]
-enum Text {
-    Title,
-    Clipboard,
-    Use,
-    AnotherCode,
-    Paste,
-    NoCodeInClipboard,
-    Enroll,
-    NotACode,
-    Damaged,
-    Working,
-    Done,
-    FirstReportLater,
-    OldScript,
-    Other,
 }
 
 struct Ui {
@@ -328,100 +288,12 @@ struct Ui {
 
 impl Ui {
     fn t(&self, text: Text) -> &'static str {
-        let (de, en) = match text {
-            Text::Title => ("Bei opensecmon anmelden", "Enroll with opensecmon"),
-            Text::Clipboard => (
-                "In der Zwischenablage liegt ein Anmeldecode für opensecmon unter {address}.\n\nDiesen Rechner damit anmelden?",
-                "The clipboard holds an enrollment code for opensecmon at {address}.\n\nEnroll this computer with it?",
-            ),
-            Text::Use => ("Anmelden", "Enroll"),
-            Text::AnotherCode => ("Anderen Code eingeben", "Enter another code"),
-            Text::Paste => (
-                "Kopieren Sie den Anmeldecode in opensecmon (er beginnt mit osa1_) und fügen Sie ihn hier ein. Ist er schon kopiert, genügt OK.\n\nNeuer Rechner: Assets → Rechner (Agent) → Rechner hinzufügen. Schon bekannter Rechner: auf seiner Seite „Neuen Code erzeugen“.",
-                "Copy the enrollment code in opensecmon (it starts with osa1_) and paste it here. If it is already copied, OK is enough.\n\nNew computer: Assets → Computers (agent) → Add computer. Known computer: “Make a new code” on its page.",
-            ),
-            Text::NoCodeInClipboard => (
-                "In der Zwischenablage liegt kein Anmeldecode. Kopieren Sie ihn in opensecmon mit dem Knopf „Kopieren“ neben dem Code und drücken Sie dann OK, oder fügen Sie ihn in das Feld ein.",
-                "The clipboard holds no enrollment code. Copy it in opensecmon with the “Copy” button next to the code and press OK, or paste it into the field.",
-            ),
-            Text::Enroll => ("Anmelden", "Enroll"),
-            Text::NotACode => (
-                "Das ist kein Anmeldecode. Ein Anmeldecode beginnt mit osa1_. Kopieren Sie ihn in opensecmon mit dem Knopf neben dem Code.",
-                "This is not an enrollment code. An enrollment code starts with osa1_. Copy it in opensecmon with the button next to the code.",
-            ),
-            Text::Damaged => (
-                "Der Code ist unvollständig oder beschädigt. Kopieren Sie ihn in opensecmon noch einmal mit dem Knopf neben dem Code.",
-                "The code is incomplete or damaged. Copy it again in opensecmon with the button next to the code.",
-            ),
-            Text::Working => (
-                "Anmeldung bei opensecmon unter {address} …",
-                "Enrolling with opensecmon at {address} …",
-            ),
-            Text::Done => (
-                "Dieser Rechner ist bei opensecmon angemeldet als „{device}“.\n\nEr meldet seine installierte Software ab jetzt von selbst, etwa alle 15 Minuten. Sie müssen nichts weiter tun.",
-                "This computer is enrolled with opensecmon as \"{device}\".\n\nFrom now on it reports its installed software by itself, about every 15 minutes. There is nothing else to do.",
-            ),
-            Text::FirstReportLater => (
-                "Die erste Meldung hat noch nicht geklappt; der Rechner versucht es in einigen Minuten noch einmal.",
-                "The first report did not work yet; the computer tries again in a few minutes.",
-            ),
-            Text::OldScript => (
-                "Das frühere Skript opensecmon-agent wurde von diesem Rechner entfernt. In opensecmon steht der Rechner jetzt eventuell doppelt; den alten Eintrag können Sie dort löschen.",
-                "The earlier script opensecmon-agent was removed from this computer. opensecmon may now list the computer twice; you can delete the old entry there.",
-            ),
-            Text::Other => (
-                "Die Anmeldung hat nicht geklappt.",
-                "The enrollment did not work.",
-            ),
-        };
-        match self.lang {
-            Lang::De => de,
-            Lang::En => en,
-        }
+        texts::t(self.lang, text)
     }
 
     /// The message for a kind of error from `opensecagent enroll --for-dialog`.
     fn failure(&self, kind: &str) -> Option<&'static str> {
-        let (de, en) = match kind {
-            "code_damaged" => return Some(self.t(Text::Damaged)),
-            "code_invalid" => (
-                "Der Code ist abgelaufen, wurde schon benutzt oder durch einen neueren ersetzt. Erstellen Sie in opensecmon einen neuen Code und kopieren Sie ihn.",
-                "The code has expired, was used already or was replaced by a newer one. Create a new code in opensecmon and copy it.",
-            ),
-            "network_not_allowed" => (
-                "opensecmon nimmt aus diesem Netz keine Rechner an. Fragen Sie, wer opensecmon betreibt.",
-                "opensecmon does not accept computers from this network. Ask whoever runs opensecmon.",
-            ),
-            "unreachable" => (
-                "opensecmon unter {address} ist nicht erreichbar. Ist dieser Rechner im richtigen Netz (z. B. im Büro- oder Heimnetz)? Versuchen Sie es dann noch einmal.",
-                "opensecmon at {address} cannot be reached. Is this computer in the right network (e.g. the office or home network)? Then try again.",
-            ),
-            "untrusted" => (
-                "Die Gegenstelle unter {address} hat sich nicht als das opensecmon aus dem Code ausgewiesen (anderes Zertifikat). Es wurde nichts gesendet. Fragen Sie, wer opensecmon betreibt.",
-                "The other side at {address} did not prove to be the opensecmon of the code (another certificate). Nothing was sent. Ask whoever runs opensecmon.",
-            ),
-            "wait" => (
-                "opensecmon ist gerade beschäftigt. Versuchen Sie es in einer Minute noch einmal.",
-                "opensecmon is busy right now. Try again in a minute.",
-            ),
-            "unsupported_system" => (
-                "opensecmon unterstützt dieses System nicht.",
-                "opensecmon does not support this system.",
-            ),
-            "not_authorized" => (
-                "Für die Anmeldung braucht es das Passwort eines Administrators dieses Rechners.",
-                "Enrolling needs the password of an administrator of this computer.",
-            ),
-            "no_pkexec" => (
-                "pkexec fehlt; ohne pkexec kann der Dialog den Rechner nicht anmelden. Im Terminal geht es mit „sudo opensecagent enroll“.",
-                "pkexec is missing; without it the dialog cannot enroll the computer. In a terminal, use \"sudo opensecagent enroll\".",
-            ),
-            _ => return None,
-        };
-        Some(match self.lang {
-            Lang::De => de,
-            Lang::En => en,
-        })
+        texts::failure(self.lang, kind)
     }
 
     fn command(&self) -> Command {
@@ -574,21 +446,6 @@ mod tests {
             Lang::En
         );
         assert_eq!(lang(env(&[])), Lang::En);
-    }
-
-    #[test]
-    fn only_a_valid_code_in_the_clipboard_is_offered() {
-        let code = crate::code::tests::encode("192.0.2.10:8444", None, "ABCD-EFGH");
-        assert_eq!(
-            offered_code(Some(code.clone())),
-            Some((code.clone(), "192.0.2.10:8444".to_owned()))
-        );
-        assert_eq!(offered_code(None), None);
-        assert_eq!(offered_code(Some(String::new())), None);
-        assert_eq!(offered_code(Some("some other text".into())), None);
-        // A damaged code is not offered; the user then pastes it and gets the message for a damaged code.
-        let damaged = format!("{}x", &code[..code.len() - 1]);
-        assert_eq!(offered_code(Some(damaged)), None);
     }
 
     #[test]
