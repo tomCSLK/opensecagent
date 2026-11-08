@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Enroll with opensecmon
+Name[de]=Bei opensecmon anmelden
+Comment=Report the installed software of this computer to opensecmon
+Comment[de]=Die installierte Software dieses Rechners an opensecmon melden
+Exec=/usr/bin/opensecagent enroll-dialog
+Icon=opensecagent
+Terminal=false
+Categories=System;Security;
+Keywords=opensecmon;opensecagent;agent;security;
+Keywords[de]=opensecmon;opensecagent;Agent;Sicherheit;Anmelden;

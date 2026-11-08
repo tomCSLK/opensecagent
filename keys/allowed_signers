@@ -1,0 +1,3 @@
+# Publisher key of opensecagent: signs the packages that opensecmon offers to the computers as updates.
+# The private key stays with the publisher (never in this repository). Check: ssh-keygen -Y verify -f keys/allowed_signers -I opensecagent -n opensecagent -s <file>.sig < <file>
+opensecagent namespaces="opensecagent" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMdp8YeVwQVc2xQPYIcv383I5XwPfjn634OoVSmc/05P opensecagent-release

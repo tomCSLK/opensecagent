@@ -1,0 +1,40 @@
+[Unit]
+Description=Report the installed software to opensecmon
+Documentation=https://github.com/tomCSLK/opensecagent
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/opensecagent run
+Restart=on-failure
+RestartSec=60
+# Runs as root, but may only read files it could not read otherwise (the Flatpaks in the users' home folders) and
+# write its own folder /var/lib/opensecagent. The token there is readable for root only.
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+AmbientCapabilities=
+StateDirectory=opensecagent
+StateDirectoryMode=0700
+UMask=0077
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

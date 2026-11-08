@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- The enrollment dialog runs "pkexec /usr/bin/opensecagent enroll", which needs the password of an
+     administrator every time (no "keep": the dialog is used once per computer). -->
+<policyconfig>
+  <vendor>opensecagent</vendor>
+  <vendor_url>https://github.com/tomCSLK/opensecagent</vendor_url>
+  <action id="io.github.tomcslk.opensecagent.enroll">
+    <description>Enroll this computer with opensecmon</description>
+    <description xml:lang="de">Diesen Rechner bei opensecmon anmelden</description>
+    <message>Enrolling this computer with opensecmon needs the password of an administrator.</message>
+    <message xml:lang="de">Zum Anmelden dieses Rechners bei opensecmon ist das Passwort eines Administrators nötig.</message>
+    <icon_name>opensecagent</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/opensecagent</annotate>
+  </action>
+</policyconfig>

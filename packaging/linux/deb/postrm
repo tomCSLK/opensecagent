@@ -1,0 +1,12 @@
+#!/bin/sh
+# postrm of the opensecagent .deb. Purge removes the enrollment and the token; the computer stays in opensecmon
+# until it is deleted there.
+set -e
+
+#DEBHELPER#
+
+if [ "$1" = purge ]; then
+  rm -rf /var/lib/opensecagent
+fi
+
+exit 0

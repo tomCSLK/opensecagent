@@ -1,0 +1,68 @@
+[package]
+name = "opensecagent"
+version = "0.1.2"
+edition = "2024"
+description = "Reports the installed software of a desktop computer to opensecmon"
+authors = ["Thomas Cieslik"]
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/tomCSLK/opensecagent"
+publish = false
+
+[dependencies]
+clap = { version = "4.6.7", features = ["derive", "env"] }
+# Reports are sent gzip-compressed (a Debian package list is a few hundred KB as JSON).
+flate2 = { version = "1.1.11", default-features = false, features = ["zlib-rs"] }
+# HTTPS client as in opensecmon: HTTP/1.1 with hyper over rustls (ring, no C build of aws-lc).
+http-body-util = "0.1.5"
+hyper = { version = "1.12.0", features = ["client", "http1"] }
+hyper-util = { version = "0.1.21", features = ["tokio"] }
+# "Valid for the address in the usual way" (opensecmon behind a proxy) uses the trust store of the system, so an
+# own company CA works as in the browser. Brings no aws-lc either.
+rustls-platform-verifier = "0.7.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["rt", "time", "net", "io-util", "macros", "signal"] }
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["logging", "ring", "tls12"] }
+
+[dev-dependencies]
+# A stand-in for the agent API of opensecmon over HTTPS with its own certificates.
+hyper = { version = "1.12.0", features = ["server", "http1"] }
+hyper-util = { version = "0.1.21", features = ["server", "tokio", "service"] }
+rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "pem", "ring"] }
+tempfile = "3.27.0"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
+# The Debian package (dev/deb.sh): the static binary, the service, the enrollment dialog in the start menu and its
+# polkit rule.
+[package.metadata.deb]
+maintainer = "Thomas Cieslik <m.tomcs@gmail.com>"
+copyright = "2026, Thomas Cieslik"
+license-file = "LICENSE"
+extended-description = """\
+Reports the installed software of this computer (Debian packages, snaps and Flatpaks of the system and of all \
+users) to opensecmon, which matches it against security advisories. Enroll the computer once with \"Enroll with \
+opensecmon\" in the start menu; the service then reports by itself about every 15 minutes."""
+section = "admin"
+priority = "optional"
+depends = "zenity | kdialog, pkexec | policykit-1"
+# Lets the enrollment dialog take the code from the clipboard by itself.
+recommends = "wl-clipboard, xclip | xsel"
+maintainer-scripts = "packaging/linux/deb/"
+assets = [
+    ["target/release/opensecagent", "usr/bin/", "755"],
+    ["packaging/linux/opensecagent.service", "usr/lib/systemd/system/", "644"],
+    ["packaging/linux/io.github.tomcslk.opensecagent.policy", "usr/share/polkit-1/actions/", "644"],
+    ["packaging/linux/opensecagent-enroll.desktop", "usr/share/applications/", "644"],
+    ["packaging/linux/opensecagent.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
+    ["THIRD-PARTY-LICENSES.txt", "usr/share/doc/opensecagent/", "644"],
+    ["README.md", "usr/share/doc/opensecagent/", "644"],
+]
+# Started right away: until the computer is enrolled it only looks at its files once a minute.
+systemd-units = { unit-name = "opensecagent", enable = true, start = true, restart-after-upgrade = true }

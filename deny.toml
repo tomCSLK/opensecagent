@@ -1,0 +1,43 @@
+# cargo deny check: licenses, sources, duplicate crates and RustSec advisories of the dependencies.
+# https://embarkstudios.github.io/cargo-deny/
+
+[graph]
+# opensecagent is built for Linux and Windows desktops (Intel/AMD and ARM).
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
+]
+
+[advisories]
+# report unmaintained and unsound crates anywhere in the tree
+unmaintained = "all"
+unsound = "all"
+ignore = []
+
+[licenses]
+# Licenses compatible with AGPL-3.0-or-later that occur in the tree. Where a crate offers a choice, cargo deny
+# takes an allowed one.
+allow = [
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "ISC",
+    "MIT",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.9
+# opensecagent itself is not published on crates.io
+private = { ignore = true }
+
+[bans]
+# Several versions of a crate only warn: they come in through dependencies.
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
