@@ -34,6 +34,10 @@ rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "
 tempfile = "3.27.0"
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros"] }
 
+# Icon and version information in opensecagent.exe (build.rs); only a build tool, nothing of it is in the program.
+[target.'cfg(windows)'.build-dependencies]
+winresource = { version = "0.1.34", default-features = false }
+
 [profile.release]
 lto = "thin"
 codegen-units = 1
