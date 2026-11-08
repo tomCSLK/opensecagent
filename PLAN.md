@@ -343,4 +343,5 @@ Geprüft zusammen mit opensecmon: keine Geheimnisse in Stand und Historie (nur d
 `keys/allowed_signers` und erfundene Beispielcodes). Betriebsdaten der eigenen Rechner und der Ort des
 Signaturschlüssels nur in `CLAUDE.local.md`. README mit Stand, `SECURITY.md` und `CONTRIBUTING.md` neu. Lizenz
 AGPL-3.0-or-later bestätigt. Die Historie wird wie bei opensecmon mit einem Anfangs-Commit neu begonnen (alte
-Rechnernamen standen in früheren Commits).
+Rechnernamen standen in früheren Commits); Commit-Nummern in diesem Plan beziehen sich auf die frühere, private
+Historie.
