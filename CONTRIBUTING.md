@@ -32,7 +32,7 @@ pull request; `cargo deny` also runs weekly. The Debian package is built with `d
 ## Conventions
 
 - **Language:** code, identifiers, code comments, commit messages, the README and the changelog are English; only the internal
-  planning files `PLAN.md` and `CLAUDE.md` are German.
+  planning files `PLAN.md`, `CLAUDE.md` and `docs/windows.md` are German.
 - **Users first:** people who install the agent should need neither a terminal nor keys, fingerprints or configuration files.
 - **Output of other programs** (`dpkg-query`, `snap`, `flatpak`, the registry) is data: check its size and form, never run it.
 - **Dependencies:** only maintained crates under a license compatible with the AGPL (see `deny.toml`). Give a short reason in the

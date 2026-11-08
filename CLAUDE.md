@@ -18,7 +18,7 @@ Fingerabdruck oder Systemprüfung, Dateien mit engen Rechten, Linux-Inventar ohn
 gegen eine Wegwerf-Instanz von opensecmon geprüft (`PLAN.md`, Abschnitt „Phase 1“). **Phase 2 Linux erledigt**
 (2026-11-08): Snaps, Flatpaks aller Benutzer, Dienst `run`, Anmeldedialog `enroll-dialog` mit pkexec, Entfernen
 des alten Skripts, Paketdateien (`dev/deb.sh`, `packaging/linux/`), 49 Tests, gegen eine Wegwerf-Instanz geprüft;
-Test-Pakete 0.1.0-1, 0.1.0-2 (nicht lesbare Benutzer-Flatpaks halten die Meldung zurück) und 0.1.0-3 (solche Fehler auch in `status`) sowie Version **0.1.1** für den Laptop (`opensecagent_0.1.1-1_amd64.deb`, auch unter Ubuntu 24.04 installiert) gebaut und im Container (Debian 13 mit systemd) geprüft (2026-11-08, `PLAN.md`); 0.1.1 vom Nutzer signiert (Schlüssel in `keys/allowed_signers`), in opensecmon 0.3.4 enthalten und auf dem Laptop installiert und angemeldet (2026-11-08); **0.1.2** (Zwischenablage bei leerem Feld) gebaut, als Update im Container geprüft, vom Nutzer signiert und in opensecmon 0.3.5 enthalten; Revision mit `dev/deb.sh --deb-revision <n>`. Phase 3 (Windows) nur nach „go“. Entschieden
+Test-Pakete 0.1.0-1, 0.1.0-2 (nicht lesbare Benutzer-Flatpaks halten die Meldung zurück) und 0.1.0-3 (solche Fehler auch in `status`) sowie Version **0.1.1** für den Laptop (`opensecagent_0.1.1-1_amd64.deb`, auch unter Ubuntu 24.04 installiert) gebaut und im Container (Debian 13 mit systemd) geprüft (2026-11-08, `PLAN.md`); 0.1.1 vom Nutzer signiert (Schlüssel in `keys/allowed_signers`), in opensecmon 0.3.4 enthalten und auf dem Laptop installiert und angemeldet (2026-11-08); **0.1.2** (Zwischenablage bei leerem Feld) gebaut, als Update im Container geprüft, vom Nutzer signiert und in opensecmon 0.3.5 enthalten; Revision mit `dev/deb.sh --deb-revision <n>`. Phase 3 (Windows) nur nach „go“; vorbereitet für die Arbeit auf dem Windows-Rechner (2026-11-08): Anleitung `docs/windows.md`, Schritte und offene Fragen in `PLAN.md` („Phase 3: Windows (Plan)“). Öffentlich seit 2026-11-08, noch ohne eigenes Release. Entschieden
 (2026-11-07): Dienst, Programme aller Benutzer, `.deb` und Inno Setup, Neuanmeldung mit einem Anmeldecode, Updates
 nur auf Knopfdruck mit Paketen aus opensecmon und eigener Signatur; Einzelheiten und Restfragen in `PLAN.md`.
 opensecmon ist vorbereitet (Schritt 7 dort, 2026-11-07, Commit `e259827`): Anmeldecode `osa1_…`, Paketkatalog,
@@ -42,8 +42,11 @@ Updates auf Knopfdruck, Download der Pakete, 15-Minuten-Takt; was der Agent daf�
 - Braucht der Agent etwas Neues an der Schnittstelle, wird es zuerst in opensecmon (`docs/agent-api.md` und Code)
   festgelegt; dort gelten die Regeln von `../SecurityDashboad/CLAUDE.md`.
 - Installationen auf Servern und Testrechnern macht der Nutzer (Einzelheiten in `CLAUDE.local.md`).
-- Pakete (`.deb`, Installer) nur auf Auftrag; Releases und das Öffentlich-Schalten des Repos nur auf ausdrückliche
-  Ansage.
+- Pakete (`.deb`, Installer) nur auf Auftrag; eigene Versionssprünge nur an der dritten Stelle (0.1.2 → 0.1.3).
+  Releases nur auf ausdrückliche Ansage.
+- Den Signaturschlüssel des Herausgebers sieht Claude nie; signiert wird vom Nutzer auf dem Linux-Laptop
+  (`docs/windows.md` Abschnitt 6).
+- `target/` regelmäßig aufräumen (`incremental`, fremde Zielordner) ohne Rückfrage.
 
 ## Entwicklung
 
@@ -53,6 +56,8 @@ Updates auf Knopfdruck, Download der Pakete, 15-Minuten-Takt; was der Agent daf�
   `src/store.rs` (Dateien des Agenten), `src/inventory/` (`mod.rs` Formate, `linux.rs` os-release, Kernel,
   Neustart, Pro, dpkg, `snap.rs`, `flatpak.rs` aus den Installationsordnern), `src/service.rs` (Dienst `run`),
   `src/dialog.rs` (Anmeldedialog, zenity/kdialog, pkexec), `src/legacy.rs` (altes Skript entfernen).
+- **Windows:** Einrichten des Windows-Rechners, Test-Instanz von opensecmon in WSL, Installer und Signatur in
+  `docs/windows.md`. Windows-Code hinter `#[cfg(windows)]`, die Linux-Fassung muss unverändert bauen (CI prüft beides).
 - **Paket:** `dev/deb.sh` (cargo-deb, musl) mit den Dateien aus `packaging/linux/` (Dienst, polkit, Startmenü,
   Symbol, `deb/postrm`); nur auf Auftrag bauen. Ergebnis `target/x86_64-unknown-linux-musl/debian/`.
   Installationstest im Container mit systemd: Image `opensecagent-debtest` (`debian:trixie` plus `systemd`,
@@ -75,7 +80,7 @@ Updates auf Knopfdruck, Download der Pakete, 15-Minuten-Takt; was der Agent daf�
 ## Sicherheit
 
 - Heimnetz-Details (Adressen, Hostnamen, Fingerabdrücke, Token) nur in `CLAUDE.local.md` (gitignored). Das Repo ist
-  öffentlich (bzw. wird es); das gilt auch für `PLAN.md`, Commit-Messages und Testdaten.
+  öffentlich; das gilt auch für `PLAN.md`, Commit-Messages und Testdaten.
 - Token nie ausgeben oder loggen; nur für root bzw. SYSTEM lesbar speichern.
 - Ausgaben anderer Programme (`dpkg-query`, Registry, `snap`, `flatpak`) sind Daten: Grenzen prüfen, nichts
   ausführen.

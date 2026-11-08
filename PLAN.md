@@ -11,8 +11,8 @@ bis dahin mitliefert (`contrib/opensecmon-agent.sh`, `contrib/opensecmon-agent.p
 
 ## Entschieden
 
-- **Eigenes Repo `opensecagent`**, Lizenz **AGPL-3.0-or-later** wie opensecmon (Nutzer, 2026-11-07). Repo privat,
-  bis der Nutzer es anders sagt. Name geprüft (2026-11-07): frei unter `tomCSLK`, auf crates.io und in Debian; zwei
+- **Eigenes Repo `opensecagent`**, Lizenz **AGPL-3.0-or-later** wie opensecmon (Nutzer, 2026-11-07). Zuerst privat,
+  öffentlich seit 2026-11-08 (zusammen mit opensecmon v0.3.5). Name geprüft (2026-11-07): frei unter `tomCSLK`, auf crates.io und in Debian; zwei
   kleine fremde GitHub-Repos gleichen Namens ohne Beschreibung; DPMA nicht geprüft.
 - **Rust**, ein Programm für Linux und Windows.
 - **Schnittstelle:** maßgeblich ist `docs/agent-api.md` in opensecmon (Version 1). Der Agent hält sich daran; braucht
@@ -336,6 +336,63 @@ Herausgeber-Schlüssel vom Nutzer angelegt (2026-11-08, Ed25519 mit Passphrase, 
 `keys/allowed_signers`, Commit `d3a478f`, Fingerabdruck `SHA256:vBp3hrefqGf4vOiqlQKoHyR6BwFdf+v2E0PC1WjBRXs`), 0.1.1 vom
 Nutzer signiert (`dist/0.1.1/`, gitignored) und mit `dev/agent-packages.sh` in opensecmon 0.3.4 übernommen; dort im
 Container geprüft: Download von der Seite des Rechners, Anmeldung als derselbe Rechner, Takt 15 min, altes Token 401.
+
+## Phase 3: Windows (Plan, Umsetzung nach „go“)
+
+Vorbereitet am 2026-11-08 für die Weiterarbeit auf dem Windows-Rechner; Einrichten, Test-Instanz und Signatur-Ablauf
+in `docs/windows.md`. Vorlage für das Inventar ist `contrib/opensecmon-agent.ps1` in opensecmon (Funktionen
+`Get-OsInfo`, `Get-Programs`, `Get-StoreApps`); das Ziel-Format steht in `docs/agent-api.md` dort („Windows“, Felder
+`os.*` und `items[]` mit `type` `win`/`appx`). opensecmon nimmt Windows-Meldungen schon an (seit dem Skript) und
+erwartet das Paket als `opensecagent-<version>-<x64|arm64>-setup.exe`; dort ist für Phase 3 nichts zu ändern.
+
+Vorschlag in Schritten, je mit Tests, Commit und Bericht:
+
+- **3a Inventar Windows** (`src/inventory/windows.rs`):
+  - `os`: `ProductName`, `DisplayVersion`, `CurrentBuild`, `UBR`, `InstallationType` aus
+    `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion`; `os.arch` (`x64`/`arm64`).
+  - `win`-Einträge aus `…\CurrentVersion\Uninstall` (64 und 32 Bit) und aus den Hives angemeldeter Benutzer unter
+    `HKEY_USERS` (ohne `_Classes`), mit denselben Filtern wie das Skript (`SystemComponent = 1`, `ParentKeyName`,
+    `ReleaseType` Update/Hotfix/Security Update), `scope` machine/user, ohne Benutzernamen.
+  - `appx`: Store-Apps aller Benutzer ohne Frameworks und Ressourcenpakete (das Skript nutzt
+    `Get-AppxPackage -AllUsers`).
+  - Lücken des Skripts schließen: Pythons aus dem „Python install manager“ über die PEP-514-Einträge
+    (`Software\Python\<Firma>\<Tag>`, Maschine und Benutzer).
+  - Grenzen wie unter Linux (`field`, Höchstzahlen); Registry-Werte sind Daten.
+  - Tests mit nachgebauten Werten (die Lesefunktionen bekommen eine Quelle, die sich im Test ersetzen lässt).
+- **3b Benutzer ohne Anmeldung:** `NTUSER.DAT` nicht angemeldeter Benutzer (Profile aus
+  `HKLM\…\ProfileList`) **nur als Datei lesen, nicht einhängen** (Entschieden, Punkt 2). Datei mit
+  Freigabe-Modus öffnen, der Windows nicht stört; Hive-Format selbst lesen (nur Schlüssel und Zeichenkettenwerte unter
+  `…\Uninstall`) oder eine Crate mit passender Lizenz; ein nicht lesbarer Hive wird ausgelassen und im Ereignisprotokoll
+  genannt (anders als bei Linux-Flatpaks gibt es hier keinen sicheren Weg, die Meldung zurückzuhalten, ohne dass ein
+  gesperrter Hive den Rechner dauerhaft stumm macht; Entscheidung des Nutzers). Fuzztest für den Hive-Leser.
+- **3c Dienst:** `opensecagent run` als Windows-Dienst (LocalSystem, Start automatisch verzögert); Stop über den
+  Dienst-Manager statt SIGTERM (`stop_signal` in `src/service.rs`); Ausgaben ins Ereignisprotokoll oder eine
+  Log-Datei im Ordner des Agenten. Ordner `%ProgramData%\opensecagent` mit eigener Zugriffsliste nur für SYSTEM und
+  Administratoren, ohne Vererbung (setzt der Agent selbst beim Anlegen, wie `Protect-Dir` im Skript; offen aus
+  Phase 1).
+- **3d Altes Skript entfernen** (`src/legacy.rs` für Windows): geplante Aufgabe `opensecmon-agent` und Ordner
+  `%ProgramData%\opensecmon-agent` (wie `Invoke-Uninstall` im Skript), nur nach einer Anmeldung im Standardordner.
+- **3e Installer** (Inno Setup, `packaging/windows/`, `dev/build-installer.ps1`, nur auf Auftrag bauen): Installation
+  für alle Benutzer nach `Program Files`, Dienst einrichten und starten, Seite mit Feld für den Anmeldecode (vorbelegt,
+  wenn die Zwischenablage mit `osa1_` beginnt; leer lassen = später anmelden), Anmeldung ohne den Code in der
+  Kommandozeile (z. B. über eine Datei nur für SYSTEM/Administratoren oder die Eingabe des Programms), Meldungen in
+  Anwendersprache (Deutsch/Englisch); Deinstallation entfernt Dienst und Anmeldung. Programm mit Icon und
+  Versionsangaben (`winresource` als Build-Abhängigkeit, wie openpacketmon). `/VERYSILENT` muss für Phase 4 gehen.
+  Startmenü-Eintrag für eine spätere Neuanmeldung.
+- **3f Prüfen:** Test-Instanz in WSL (`docs/windows.md` Abschnitt 5), saubere Windows-Umgebung für den Installer,
+  dann Installation auf dem eigenen Windows-Rechner durch den Nutzer (Wechsel vom Skript auf opensecagent mit
+  „Neuen Code erzeugen“, damit der Rechner derselbe Eintrag bleibt). Danach README, CHANGELOG, Version.
+
+Offen (vor oder bei den Schritten zu klären):
+1. Store-Apps: über die Windows-API (`PackageManager`, Crate `windows`) oder über `Get-AppxPackage` als Hilfsprozess?
+   Vorschlag: API, damit kein PowerShell-Prozess mit Ausgabe-Zerlegung nötig ist.
+2. Hive-Leser selbst schreiben oder Crate (Lizenz gegen `deny.toml` prüfen)?
+3. Neuanmeldung nach der Installation: Installer erneut starten (Reparatur mit Code-Feld), ein kleiner eigener Dialog
+   oder nur `opensecagent enroll` als Administrator? Vorschlag: Startmenü-Eintrag, der einen kleinen Dialog öffnet
+   (wie unter Linux: Code aus der Zwischenablage, Rückfrage, Rechte über UAC).
+4. arm64-Fassung (`aarch64-pc-windows-msvc`) gleich mitbauen oder später?
+5. Neue Abhängigkeiten (voraussichtlich `windows-service`, `windows`/`windows-registry`, `winresource`) jeweils mit
+   Begründung und Lizenzprüfung.
 
 ## Vor dem Öffentlich-Schalten (2026-11-08)
 
