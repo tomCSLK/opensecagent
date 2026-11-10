@@ -2,27 +2,38 @@
 //! manager.
 //!
 //! - `os`: the version of Windows from `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion`.
-//! - `win`: the Uninstall entries of the machine (64 and 32 bit) and of the users signed in (their hives under
-//!   `HKEY_USERS`), without system components, parts of other entries and updates, as the script. The user is never
-//!   named. Users not signed in follow (their `NTUSER.DAT`, PLAN.md step 3b).
+//! - `win`: the Uninstall entries of the machine (64 and 32 bit) and of every user, without system components, parts
+//!   of other entries and updates, as the script. Users signed in from their hives under `HKEY_USERS`, the others
+//!   from their `NTUSER.DAT`, read as a file and never loaded (`hive.rs`, PLAN.md step 3b). The user is never named.
 //! - `win` as well: Pythons registered under `Software\Python\PythonCore` (PEP 514) that have no Uninstall entry
 //!   of their own, as the Python install manager installs them.
 //! - `appx`: the store apps of all users, without frameworks and resource packages.
 //!
 //! Values of the registry and of the store apps are data: they are only cut to the limits of the API.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
+use super::hive::{self, Hive, Snapshot};
 use super::{Inventory, InventoryError, Item, Os, field};
 
 /// opensecmon takes at most this many entries per report (docs/agent-api.md there).
 const MAX_ITEMS: usize = 50_000;
 const CURRENT_VERSION: &str = r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion";
 const UNINSTALL: &str = r"Microsoft\Windows\CurrentVersion\Uninstall";
+const PROFILE_LIST: &str = r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList";
+/// What the inventory reads from the hive of a user (`programs`, `pythons`).
+const USER_PLACES: [&str; 2] = [
+    r"Software\Microsoft\Windows\CurrentVersion\Uninstall",
+    r"Software\Python\PythonCore",
+];
 
 pub fn collect() -> Result<Inventory, InventoryError> {
-    let registry = SystemRegistry;
     let mut notes = Vec::new();
+    let offline = offline_users(&SystemRegistry, &read_hive_file, &mut notes);
+    let registry = WithOffline {
+        live: &SystemRegistry,
+        offline,
+    };
     let os = os_info(
         &registry,
         &std::env::var("PROCESSOR_ARCHITECTURE").unwrap_or_default(),
@@ -290,6 +301,167 @@ fn pythons(registry: &dyn Registry, programs: &[Item], notes: &mut Vec<String>) 
         }
     }
     items
+}
+
+/// The hives of users not signed in, from their `NTUSER.DAT` (profiles from `ProfileList`), keyed by SID. Only
+/// [`USER_PLACES`] are kept; each file is read, copied out and dropped before the next. A file that cannot be read is
+/// left out with a note that names no one (the profile folder carries the user's name, so neither the path nor the
+/// SID is written); a profile without the file (folder deleted) is left out silently.
+fn offline_users(
+    live: &dyn Registry,
+    read_file: &dyn Fn(&str) -> std::io::Result<Vec<u8>>,
+    notes: &mut Vec<String>,
+) -> BTreeMap<String, Snapshot> {
+    let signed_in: BTreeSet<String> = user_hives(live, &mut Vec::new())
+        .iter()
+        .map(|s| s.to_ascii_uppercase())
+        .collect();
+    let profiles = match live.subkeys(PROFILE_LIST) {
+        Ok(keys) => keys.unwrap_or_default(),
+        Err(e) => {
+            notes.push(format!("the user profiles could not be listed: {e}"));
+            return BTreeMap::new();
+        }
+    };
+    let mut out = BTreeMap::new();
+    for sid in profiles.into_iter().filter(|k| is_user_sid(k)) {
+        if signed_in.contains(&sid.to_ascii_uppercase()) {
+            continue;
+        }
+        let dir = live
+            .value(&format!(r"{PROFILE_LIST}\{sid}"), "ProfileImagePath")
+            .map(|v| v.text())
+            .unwrap_or_default();
+        if dir.trim().is_empty() {
+            continue;
+        }
+        let dir = expand(dir.trim(), |name| std::env::var(name).ok());
+        let file = format!(r"{}\NTUSER.DAT", dir.trim_end_matches('\\'));
+        let bytes = match read_file(&file) {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => {
+                notes.push(format!(
+                    "the programs of a user not signed in could not be read: {e}"
+                ));
+                continue;
+            }
+        };
+        match Hive::parse(bytes).and_then(|h| Snapshot::take(&h, &USER_PLACES)) {
+            Ok(snapshot) => {
+                out.insert(sid, snapshot);
+            }
+            Err(e) => notes.push(format!(
+                "the programs of a user not signed in could not be read: {e}"
+            )),
+        }
+    }
+    out
+}
+
+/// `%NAME%` replaced by the variable of the environment, as Windows expands `REG_EXPAND_SZ` (`ProfileImagePath` is
+/// usually `C:\Users\…`, sometimes `%SystemDrive%\Users\…`). Unknown names stay as they are.
+fn expand(text: &str, var: impl Fn(&str) -> Option<String>) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(start) = rest.find('%') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        let Some(end) = after.find('%') else {
+            out.push_str(&rest[start..]);
+            return out;
+        };
+        let name = &after[..end];
+        match (!name.is_empty()).then(|| var(name)).flatten() {
+            Some(value) => out.push_str(&value),
+            None => {
+                out.push('%');
+                out.push_str(name);
+                out.push('%');
+            }
+        }
+        rest = &after[end + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Reads a hive file of a user not signed in. The file is opened only for reading, with every share mode (Windows
+/// and other programs may open it meanwhile) and only for as long as reading takes; a link at its place (the user
+/// owns the folder) is not followed but refused, as is a file larger than [`hive::MAX_FILE`].
+fn read_hive_file(path: &str) -> std::io::Result<Vec<u8>> {
+    use std::io::Read;
+    use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+
+    use ::windows::Win32::Storage::FileSystem::{
+        FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_SEQUENTIAL_SCAN,
+        FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+    };
+
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode((FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE).0)
+        .custom_flags((FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN).0)
+        .open(path)?;
+    let meta = file.metadata()?;
+    if !meta.is_file() || meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0 {
+        return Err(std::io::Error::other("not a plain file"));
+    }
+    let too_large = || std::io::Error::other(hive::HiveError::TooLarge.to_string());
+    if meta.len() > hive::MAX_FILE {
+        return Err(too_large());
+    }
+    let mut bytes = Vec::with_capacity(meta.len() as usize);
+    file.by_ref()
+        .take(hive::MAX_FILE + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > hive::MAX_FILE {
+        return Err(too_large());
+    }
+    Ok(bytes)
+}
+
+/// The registry of this computer with the users not signed in under `HKU\<SID>`, as if their hives were loaded.
+struct WithOffline<'a> {
+    live: &'a dyn Registry,
+    offline: BTreeMap<String, Snapshot>,
+}
+
+impl WithOffline<'_> {
+    /// The copied hive and the path inside it, for a path under `HKU\<SID>` of a user not signed in.
+    fn offline<'p>(&self, path: &'p str) -> Option<(&Snapshot, &'p str)> {
+        let rest = path.strip_prefix(r"HKU\")?;
+        let (sid, rest) = rest.split_once('\\').unwrap_or((rest, ""));
+        self.offline.get(sid).map(|s| (s, rest))
+    }
+}
+
+impl Registry for WithOffline<'_> {
+    fn subkeys(&self, path: &str) -> Result<Option<Vec<String>>, String> {
+        if path == "HKU" {
+            let mut keys = self.live.subkeys(path)?.unwrap_or_default();
+            for sid in self.offline.keys() {
+                if !keys.iter().any(|k| k.eq_ignore_ascii_case(sid)) {
+                    keys.push(sid.clone());
+                }
+            }
+            return Ok(Some(keys));
+        }
+        match self.offline(path) {
+            Some((snapshot, rest)) => Ok(snapshot.subkeys(rest)),
+            None => self.live.subkeys(path),
+        }
+    }
+
+    fn value(&self, path: &str, name: &str) -> Option<Value> {
+        match self.offline(path) {
+            Some((snapshot, rest)) => match snapshot.value(rest, name)? {
+                hive::Data::Text(s) => Some(Value::Text(s)),
+                hive::Data::Number(n) => Some(Value::Number(n)),
+            },
+            None => self.live.value(path, name),
+        }
+    }
 }
 
 /// A store app as `appx` of the report; `None` without a package family name.
@@ -787,6 +959,148 @@ mod tests {
             (item.name.as_str(), item.publisher.unwrap().len()),
             ("A", 200)
         );
+    }
+
+    const BOB: &str = "S-1-5-21-1111-2222-3333-1002";
+
+    #[test]
+    fn users_not_signed_in_are_read_from_their_hive_file() {
+        let mut r = windows_11();
+        r.key(
+            &format!(r"{ALICE}\Software\{UNINSTALL}\Zoom"),
+            &[
+                ("DisplayName", t("Zoom Workplace")),
+                ("DisplayVersion", t("6.7.0")),
+            ],
+        );
+        for (sid, dir) in [
+            // signed in: read from HKU, the file is not touched
+            ("S-1-5-21-1111-2222-3333-1001", r"C:\Users\alice"),
+            (BOB, r"%SystemDrive%\Users\bob\"),
+            // no file, no access, not a hive
+            ("S-1-5-21-1111-2222-3333-1003", r"C:\Users\carol"),
+            ("S-1-5-21-1111-2222-3333-1004", r"C:\Users\dave"),
+            ("S-1-5-21-1111-2222-3333-1005", r"C:\Users\eve"),
+            // not people, or a broken profile kept aside by Windows
+            ("S-1-5-18", r"%systemroot%\system32\config\systemprofile"),
+            ("S-1-5-21-1111-2222-3333-1006.bak", r"C:\Users\frank"),
+        ] {
+            r.key(
+                &format!(r"{PROFILE_LIST}\{sid}"),
+                &[("ProfileImagePath", t(dir))],
+            );
+        }
+        let read = |path: &str| -> std::io::Result<Vec<u8>> {
+            use std::io::{Error, ErrorKind};
+            match path.rsplit('\\').nth(1).unwrap_or_default() {
+                "bob" => {
+                    assert!(path.ends_with(r"\Users\bob\NTUSER.DAT"), "{path}");
+                    Ok(super::super::hive::build::sample())
+                }
+                "carol" => Err(Error::from(ErrorKind::NotFound)),
+                "dave" => Err(Error::from(ErrorKind::PermissionDenied)),
+                "eve" => Ok(b"not a hive".to_vec()),
+                _ => panic!("read: {path}"),
+            }
+        };
+        let mut notes = Vec::new();
+        let offline = offline_users(&r, &read, &mut notes);
+        assert_eq!(offline.keys().collect::<Vec<_>>(), [BOB]);
+        assert_eq!(notes.len(), 2, "{notes:?}");
+        assert!(
+            notes.iter().all(|n| n.contains("a user not signed in")
+                && !n.contains("S-1-5")
+                && !n.contains("dave")
+                && !n.contains("eve")),
+            "{notes:?}"
+        );
+        let registry = WithOffline { live: &r, offline };
+        let mut notes = Vec::new();
+        let items = programs(&registry, &mut notes);
+        assert!(notes.is_empty(), "{notes:?}");
+        let got: Vec<_> = items
+            .iter()
+            .map(|i| (i.id.as_str(), i.name.as_str(), i.version.as_str(), i.scope))
+            .collect();
+        // the same key name of two users once (the first SID)
+        assert_eq!(
+            got,
+            [
+                ("Zoom", "Zoom Workplace", "6.7.0", Some("user")),
+                ("Notepad++", "Notepad++ (64-bit x64)", "8.9.9", Some("user")),
+            ]
+        );
+        let pythons = pythons(&registry, &items, &mut notes);
+        let got: Vec<_> = pythons
+            .iter()
+            .map(|i| (i.id.as_str(), i.version.as_str(), i.scope))
+            .collect();
+        assert_eq!(got, [(r"Python\PythonCore\3.14", "3.14.0", Some("user"))]);
+        // the machine is still read from the registry
+        assert_eq!(os_info(&registry, "AMD64").unwrap().build, Some(26200));
+    }
+
+    #[test]
+    fn variables_in_profile_paths_are_expanded() {
+        let var = |n: &str| {
+            n.eq_ignore_ascii_case("SystemDrive")
+                .then(|| "C:".to_owned())
+        };
+        assert_eq!(expand(r"%SystemDrive%\Users\bob", var), r"C:\Users\bob");
+        assert_eq!(expand(r"%systemdrive%\a%Unknown%b", var), r"C:\a%Unknown%b");
+        assert_eq!(expand("100% sure", var), "100% sure");
+        assert_eq!(expand("%%x", var), "%%x");
+        assert_eq!(expand(r"C:\Users\bob", var), r"C:\Users\bob");
+    }
+
+    /// The default profile of Windows (copied for every new user, never loaded): a real hive file.
+    #[test]
+    fn the_hive_of_the_default_profile_is_read() {
+        let drive = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
+        let bytes = read_hive_file(&format!(r"{drive}\Users\Default\NTUSER.DAT")).unwrap();
+        let hive = Hive::parse(bytes).unwrap();
+        let software = hive.subkeys("Software").unwrap().unwrap();
+        assert!(software.iter().any(|k| k == "Microsoft"), "{software:?}");
+        assert!(
+            hive.subkeys(r"Software\Microsoft\Windows\CurrentVersion")
+                .unwrap()
+                .is_some()
+        );
+        let desktop = ["WheelScrollLines", "CursorBlinkRate", "MenuShowDelay"]
+            .map(|name| hive.value(r"Control Panel\Desktop", name).unwrap());
+        assert!(
+            desktop
+                .iter()
+                .any(|v| matches!(v, Some(hive::Data::Text(_)))),
+            "{desktop:?}"
+        );
+        Snapshot::take(&hive, &USER_PLACES).unwrap();
+    }
+
+    #[test]
+    fn only_plain_files_are_read_as_hives() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(read_hive_file(dir.path().to_str().unwrap()).is_err());
+        let missing = dir.path().join("NTUSER.DAT");
+        assert_eq!(
+            read_hive_file(missing.to_str().unwrap())
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::NotFound
+        );
+        let target = dir.path().join("real.dat");
+        std::fs::write(&target, b"regf").unwrap();
+        assert_eq!(read_hive_file(target.to_str().unwrap()).unwrap(), b"regf");
+        // a link at its place is refused (creating one needs the right to, as in the CI)
+        let link = dir.path().join("link.dat");
+        if std::os::windows::fs::symlink_file(&target, &link).is_ok() {
+            assert_eq!(
+                read_hive_file(link.to_str().unwrap())
+                    .unwrap_err()
+                    .to_string(),
+                "not a plain file"
+            );
+        }
     }
 
     /// The real inventory of this computer (the developer's or the CI runner).
