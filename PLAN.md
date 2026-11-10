@@ -400,7 +400,9 @@ Vorschlag in Schritten, je mit Tests, Commit und Bericht:
   `%ProgramData%\opensecmon-agent` (wie `Invoke-Uninstall` im Skript), nur nach einer Anmeldung im Standardordner.
   - **Umgesetzt (2026-11-08, mit 3e):** `src/legacy_windows.rs`: `schtasks.exe /Delete /TN opensecmon-agent /F` aus
     `System32`, dann der Ordner (eine Verknüpfung an seiner Stelle wird selbst entfernt, nicht ihr Ziel); Tests mit
-    Ordner und Junction. Noch nicht auf einem Rechner mit dem alten Skript ausprobiert.
+    Ordner und Junction. Auf dem eigenen Windows-Rechner bestätigt (2026-11-10, Nutzer): nach der Anmeldung meldet
+    `schtasks /Query /TN opensecmon-agent` „nicht gefunden“, `%ProgramData%\opensecmon-agent` fehlt, der Dienst
+    `opensecagent` läuft.
 - **3e Installer** (Inno Setup, `packaging/windows/`, `dev/build-installer.ps1`, nur auf Auftrag bauen): Installation
   für alle Benutzer nach `Program Files`, Dienst einrichten und starten, Seite mit Feld für den Anmeldecode (vorbelegt,
   wenn die Zwischenablage mit `osa1_` beginnt; leer lassen = später anmelden), Anmeldung ohne den Code in der
@@ -442,7 +444,7 @@ Vorschlag in Schritten, je mit Tests, Commit und Bericht:
       Vom Nutzer auf dem eigenen Windows-Rechner installiert und angemeldet (2026-11-10, als derselbe Rechner wie vorher
       mit dem Skript): erste Meldung sofort, danach im 15-Minuten-Takt; gemeldet werden Windows, 59 Programme (48 für
       alle Benutzer, 11 eines Benutzers) und 105 Store-Apps, die Programme wie beim Vergleich mit dem Skript.
-      **Offen:** Prüfen, ob das alte Skript entfernt ist (3d), Update und Deinstallation durch den Nutzer.
+      Altes Skript dabei entfernt (3d bestätigt). **Offen:** Update und Deinstallation durch den Nutzer.
 - **3f Prüfen:** Test-Instanz in WSL (`docs/windows.md` Abschnitt 5), saubere Windows-Umgebung für den Installer,
   dann Installation auf dem eigenen Windows-Rechner durch den Nutzer (Wechsel vom Skript auf opensecagent mit
   „Neuen Code erzeugen“, damit der Rechner derselbe Eintrag bleibt). Danach README, CHANGELOG, Version.
