@@ -8,6 +8,8 @@ use serde::Serialize;
 
 #[cfg(target_os = "linux")]
 mod flatpak;
+#[cfg(any(windows, test))]
+mod hive;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "linux")]
