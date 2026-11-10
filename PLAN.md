@@ -435,6 +435,10 @@ Vorschlag in Schritten, je mit Tests, Commit und Bericht:
       (`packaging/windows/opensecagent.manifest`: Common Controls 6, DPI) über `build.rs`.
     - Test-Installer `opensecagent-0.1.2-x64-setup.exe` gebaut und signiert, beide Programme und Setup mit
       `signtool verify` geprüft; Dialog und `--code-file` ohne Netz kurz ausprobiert (51 Tests unter Windows).
+      Vom Nutzer mit dem Herausgeber-Schlüssel signiert und in opensecmon übernommen (2026-11-10, Test-Paket
+      0.3.6-2 von opensecmon: die Seite eines Rechners bietet „Windows (x64) 0.1.2“ zum Herunterladen an, im
+      Container geprüft). Die Windows-Fassung trägt noch die Versionsnummer 0.1.2 wie das Linux-Paket; ein späteres
+      Update für Windows braucht eine höhere.
       **Offen:** Installation, Anmeldung, Update und Deinstallation durch den Nutzer.
 - **3f Prüfen:** Test-Instanz in WSL (`docs/windows.md` Abschnitt 5), saubere Windows-Umgebung für den Installer,
   dann Installation auf dem eigenen Windows-Rechner durch den Nutzer (Wechsel vom Skript auf opensecagent mit
