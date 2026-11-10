@@ -444,10 +444,16 @@ Vorschlag in Schritten, je mit Tests, Commit und Bericht:
       Vom Nutzer auf dem eigenen Windows-Rechner installiert und angemeldet (2026-11-10, als derselbe Rechner wie vorher
       mit dem Skript): erste Meldung sofort, danach im 15-Minuten-Takt; gemeldet werden Windows, 59 Programme (48 für
       alle Benutzer, 11 eines Benutzers) und 105 Store-Apps, die Programme wie beim Vergleich mit dem Skript.
-      Altes Skript dabei entfernt (3d bestätigt). **Offen:** Update und Deinstallation durch den Nutzer.
+      Altes Skript dabei entfernt (3d bestätigt). Danach laut Nutzer unter Windows alles in Ordnung; der Test ist
+      vorerst abgeschlossen (2026-11-10). In opensecmon blieb die Anmeldung von 21:11 bestehen, eine Meldung außerhalb
+      des Takts passt zu einem Neustart des Dienstes (Update); eine Deinstallation mit Neuanmeldung ist dort nicht zu
+      sehen.
 - **3f Prüfen:** Test-Instanz in WSL (`docs/windows.md` Abschnitt 5), saubere Windows-Umgebung für den Installer,
   dann Installation auf dem eigenen Windows-Rechner durch den Nutzer (Wechsel vom Skript auf opensecagent mit
   „Neuen Code erzeugen“, damit der Rechner derselbe Eintrag bleibt). Danach README, CHANGELOG, Version.
+  - **Installation auf dem eigenen Windows-Rechner erledigt (2026-11-10)**, direkt mit dem signierten Installer, ohne
+    WSL und saubere Umgebung (siehe 3e). Weitere Tests unter Windows vorerst nicht (Nutzer). Offen: README,
+    CHANGELOG, Version.
 
 Offen (vor oder bei den Schritten zu klären):
 1. Store-Apps: über die Windows-API (`PackageManager`, Crate `windows`) oder über `Get-AppxPackage` als Hilfsprozess?
