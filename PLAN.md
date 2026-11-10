@@ -439,7 +439,10 @@ Vorschlag in Schritten, je mit Tests, Commit und Bericht:
       0.3.6-2 von opensecmon: die Seite eines Rechners bietet „Windows (x64) 0.1.2“ zum Herunterladen an, im
       Container geprüft). Die Windows-Fassung trägt noch die Versionsnummer 0.1.2 wie das Linux-Paket; ein späteres
       Update für Windows braucht eine höhere.
-      **Offen:** Installation, Anmeldung, Update und Deinstallation durch den Nutzer.
+      Vom Nutzer auf dem eigenen Windows-Rechner installiert und angemeldet (2026-11-10, als derselbe Rechner wie vorher
+      mit dem Skript): erste Meldung sofort, danach im 15-Minuten-Takt; gemeldet werden Windows, 59 Programme (48 für
+      alle Benutzer, 11 eines Benutzers) und 105 Store-Apps, die Programme wie beim Vergleich mit dem Skript.
+      **Offen:** Prüfen, ob das alte Skript entfernt ist (3d), Update und Deinstallation durch den Nutzer.
 - **3f Prüfen:** Test-Instanz in WSL (`docs/windows.md` Abschnitt 5), saubere Windows-Umgebung für den Installer,
   dann Installation auf dem eigenen Windows-Rechner durch den Nutzer (Wechsel vom Skript auf opensecagent mit
   „Neuen Code erzeugen“, damit der Rechner derselbe Eintrag bleibt). Danach README, CHANGELOG, Version.
