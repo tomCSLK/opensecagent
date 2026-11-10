@@ -68,7 +68,8 @@ Ehemals offene Fragen 1–5.
    - Windows: `NTUSER.DAT` nicht angemeldeter Benutzer **nur als Datei lesen, nicht einhängen** (ein eingehängter
      Hive kann die gleichzeitige Anmeldung des Benutzers stören, im schlimmsten Fall mit temporärem Profil);
      angemeldete Benutzer über `HKEY_USERS`. Store-Apps aller Benutzer liefert Windows dem SYSTEM-Konto direkt.
-     Leser für das Hive-Format in Phase 3 wählen (Lizenz prüfen) oder selbst schreiben.
+     Leser für das Hive-Format in Phase 3 wählen (Lizenz prüfen) oder selbst schreiben. Entschieden (2026-11-10,
+     Nutzer): eigener Leser, siehe 3b.
    - Linux: vor allem Flatpaks nur eines Benutzers (`~/.local/share/flatpak`). Der Dienst bekommt dafür nur
      `CAP_DAC_READ_SEARCH` (lesen), sonst eng abgeschottet (systemd-Härtung), kein volles root.
 3. **Verteilung:** Linux als `.deb`, Windows mit **Inno Setup** (wie openpacketmon). Signatur der Windows-Fassung
@@ -376,6 +377,30 @@ Vorschlag in Schritten, je mit Tests, Commit und Bericht:
   `…\Uninstall`) oder eine Crate mit passender Lizenz; ein nicht lesbarer Hive wird ausgelassen und im Ereignisprotokoll
   genannt (anders als bei Linux-Flatpaks gibt es hier keinen sicheren Weg, die Meldung zurückzuhalten, ohne dass ein
   gesperrter Hive den Rechner dauerhaft stumm macht; Entscheidung des Nutzers). Fuzztest für den Hive-Leser.
+  - **Suche nach einer Bibliothek (2026-11-10):** `nt-hive` (GPL-2.0-or-later, seit 01/2025 ohne Pflege, offener
+    Absturz aus einem Fuzztest), `regf` (MIT, jung, auf das Schreiben ausgelegt, viele Abhängigkeiten), `regf-rs`
+    (Rekursion über `ri` ohne Grenze, Stapelüberlauf), `winreg-core` (Repo gelöscht), `notatin`, `nt_hive2`,
+    `frnsc-hive` (alt, schwer oder GPL). Keine passt; Entscheidung des Nutzers: eigener Leser.
+  - **Umgesetzt (2026-11-10, „go“ des Nutzers):** `src/inventory/hive.rs`, ohne neue Abhängigkeit: liest im Speicher
+    Schlüssel entlang eines Pfads (`lf`/`lh`/`li`, `ri` nur eine Ebene), Unterschlüsselnamen und Werte `REG_SZ`,
+    `REG_EXPAND_SZ` (nicht aufgelöst, wie `windows-registry`), `REG_DWORD`, `REG_QWORD`; Namen ohne Rücksicht auf
+    Groß-/Kleinschreibung. Nicht gelesen: `.LOG1/.LOG2` (ein nicht sauber zurückgeschriebener Hive wird gelesen, wie
+    er ist), Big Data (`db`, Werte über 16 KB), Klassen, Sicherheit. Schutz, weil der Benutzer die Datei kontrolliert
+    und der Dienst als SYSTEM liest: jeder Offset geprüft, keine Rekursion außer der einen `ri`-Ebene, je Liste
+    höchstens 65 536 Einträge, je Kopie höchstens 500 000 Schritte, doppelt genannte Zellen einmal, Fehler als Werte.
+    `windows.rs`: Profile aus `ProfileList`, die nicht unter `HKEY_USERS` geladen sind; `ProfileImagePath` mit
+    `%…%` aufgelöst, Datei `NTUSER.DAT` nur lesend, mit allen Freigabe-Modi, nur für die Dauer des Lesens geöffnet,
+    ohne Verknüpfungen (`FILE_FLAG_OPEN_REPARSE_POINT`, Reparse-Punkt abgelehnt), höchstens 256 MB. Kopiert werden
+    nur `…\Uninstall` und `Software\Python\PythonCore` mit einer Ebene darunter, dann wird die Datei verworfen,
+    bevor die nächste kommt; danach erscheinen die Benutzer unter `HKU\<SID>` wie angemeldete und laufen durch
+    dieselben Filter (`programs`, `pythons`, `scope` „user“). Fehlende Datei: still ausgelassen; nicht lesbar oder
+    kaputt: Hinweis im Log ohne SID und Pfad. Tests unter Linux mit selbst gebauten Hive-Dateien (Builder in
+    `hive::build`) und Fuzztest (`FUZZ_ITERATIONS`, `FUZZ_SEED` wie in opensecmon; 200 000 Runden ohne Befund), unter
+    Windows zusätzlich mit der echten `C:\Users\Default\NTUSER.DAT` des CI-Runners; CI grün (Linux und Windows).
+    Restrisiko: Lädt Windows den Hive genau in den Millisekunden, in denen der Agent liest, kann das Laden scheitern
+    (Windows öffnet die Datei exklusiv); das Lesen dauert bei üblichen Größen nur Millisekunden alle 15 min.
+    Offen: Probe auf dem eigenen Windows-Rechner beim nächsten gebündelten Windows-Termin (abmelden, warten, ob die
+    11 Benutzerprogramme bleiben; am besten mit dem Installer 0.2.0).
 - **3c Dienst:** `opensecagent run` als Windows-Dienst (LocalSystem, Start automatisch verzögert); Stop über den
   Dienst-Manager statt SIGTERM (`stop_signal` in `src/service.rs`); Ausgaben ins Ereignisprotokoll oder eine
   Log-Datei im Ordner des Agenten. Ordner `%ProgramData%\opensecagent` mit eigener Zugriffsliste nur für SYSTEM und
@@ -458,7 +483,7 @@ Vorschlag in Schritten, je mit Tests, Commit und Bericht:
 Offen (vor oder bei den Schritten zu klären):
 1. Store-Apps: über die Windows-API (`PackageManager`, Crate `windows`) oder über `Get-AppxPackage` als Hilfsprozess?
    Vorschlag: API, damit kein PowerShell-Prozess mit Ausgabe-Zerlegung nötig ist.
-2. Hive-Leser selbst schreiben oder Crate (Lizenz gegen `deny.toml` prüfen)?
+2. ~~Hive-Leser selbst schreiben oder Crate?~~ Entschieden (2026-11-10): eigener Leser (3b).
 3. Neuanmeldung nach der Installation: Installer erneut starten (Reparatur mit Code-Feld), ein kleiner eigener Dialog
    oder nur `opensecagent enroll` als Administrator? Vorschlag: Startmenü-Eintrag, der einen kleinen Dialog öffnet
    (wie unter Linux: Code aus der Zwischenablage, Rückfrage, Rechte über UAC).
