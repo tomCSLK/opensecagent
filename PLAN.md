@@ -480,7 +480,9 @@ Vorschlag in Schritten, je mit Tests, Commit und Bericht:
     WSL und saubere Umgebung (siehe 3e). Weitere Tests unter Windows vorerst nicht (Nutzer).
   - **README und CHANGELOG nachgezogen (2026-11-20, „go“ des Nutzers):** README mit Windows (was gemeldet wird,
     Installer, Anmeldedialog, stille Installation, Log, Deinstallation, Dienst als LocalSystem, Lesen der Hives),
-    Wechsel vom Skript mit „Make a new code“; CHANGELOG mit 3b. Offen: Version (Windows trägt noch 0.1.2).
+    Wechsel vom Skript mit „Make a new code“; CHANGELOG mit 3b. Danach (2026-11-20, „go“) `docs/windows.md` (heutiger Stand) und `SECURITY.md`
+    (Umfang mit Windows, Dienst als LocalSystem, Hive-Leser mit `NTUSER.DAT` als nicht vertrauenswürdiger Eingabe).
+    Offen: Version (Windows trägt noch 0.1.2; der Installer 0.1.2 enthält 3b noch nicht).
 
 Offen (vor oder bei den Schritten zu klären):
 1. Store-Apps: über die Windows-API (`PackageManager`, Crate `windows`) oder über `Get-AppxPackage` als Hilfsprozess?

@@ -1,16 +1,17 @@
 # Windows-Fassung von opensecagent: Weiterarbeit auf einem Windows-Rechner
 
-Stand: 2026-11-08. Diese Datei beschreibt, was nötig ist, um opensecagent auf einem Windows-Rechner weiterzuentwickeln
+Stand: 2026-11-20. Diese Datei beschreibt, was nötig ist, um opensecagent auf einem Windows-Rechner weiterzuentwickeln
 und dort die Windows-Fassung (Phase 3 in `PLAN.md`) zu bauen, zu testen und als Installer zu verpacken. Was im Code zu
 tun ist, steht in `PLAN.md` im Abschnitt „Phase 3: Windows (Plan)“; diese Datei ist die Anleitung für den Rechner.
 
-**Heutiger Stand:** Unter Windows bauen das Programm und die Tests schon (CI-Job `windows-2025`, clippy und
-`cargo test` grün). Es kann sich anmelden und melden, das Inventar liest Windows-Version, Programme und Store-Apps
-(Phase 3a) und läuft als Windows-Dienst (3c); der signierte Installer richtet den Dienst ein, öffnet den
-Anmeldedialog und legt „Bei opensecmon anmelden“ ins Startmenü (3e, noch im Test). Programme nicht angemeldeter
-Benutzer (3b) fehlen. Bis zum Wechsel melden sich
-Windows-Rechner mit dem PowerShell-Skript aus opensecmon (`contrib/opensecmon-agent.ps1`), das zugleich die Vorlage
-für das Inventar ist.
+**Heutiger Stand:** Die Windows-Fassung ist fertig bis auf die Updates (Phase 4). Programm und Tests bauen unter
+Windows (CI-Job `windows-2025`, clippy und `cargo test` grün). Das Inventar liest Windows-Version, Programme des
+Rechners und aller Benutzer, auch nicht angemeldeter (3a, 3b), PEP-514-Pythons und Store-Apps; das Programm läuft als
+Windows-Dienst (3c) und entfernt bei der Anmeldung das alte PowerShell-Skript (3d). Der signierte Installer (3e)
+richtet den Dienst ein, öffnet den Anmeldedialog und legt „Bei opensecmon anmelden“ ins Startmenü; er ist auf dem
+eigenen Windows-Rechner installiert und angemeldet (2026-11-10). Offen: die Probe von 3b auf dem eigenen Rechner (der
+Installer 0.1.2 enthält 3b noch nicht) und eine höhere Versionsnummer für das nächste Windows-Paket. Vorlage für das
+Inventar war das PowerShell-Skript aus opensecmon (`contrib/opensecmon-agent.ps1`).
 
 ## 1. Was auf dem Windows-Rechner installiert sein muss
 
@@ -25,7 +26,7 @@ braucht opensecagent nicht.
 | Python 3 | `dev/third-party-licenses.py` | `winget install Python.Python.3.12` |
 | GitHub CLI | Anmeldung, Push, CI ansehen | `winget install GitHub.cli` |
 | cargo-deny 0.20.2 | Lizenz- und Sicherheitsprüfung (gleiche Version wie die CI) | `cargo install cargo-deny --locked --version 0.20.2` |
-| Inno Setup 6 | Installer (Phase 3, Schritt 3d) | `winget install JRSoftware.InnoSetup --scope user` |
+| Inno Setup 6 | Installer (Phase 3, Schritt 3e) | `winget install JRSoftware.InnoSetup --scope user` |
 | WSL 2 mit Ubuntu (optional) | Wegwerf-Instanz von opensecmon zum Testen (Abschnitt 5) | `wsl --install -d Ubuntu-24.04` (Administrator, danach Neustart) |
 | Claude Code | Weiterarbeit | wie gewohnt |
 
@@ -94,8 +95,7 @@ ein eigener Klon in WSL) oder wartet auf die CI.
 
 ## 5. Ausprobieren
 
-**Ohne Administrator und ohne Netz:** `cargo run -- --dir $env:TEMP\osa inventory` zeigt, was gemeldet würde (sobald
-das Inventar da ist). Programme anderer Benutzer und Store-Apps aller Benutzer brauchen Administrator- bzw.
+**Ohne Administrator und ohne Netz:** `cargo run -- --dir $env:TEMP\osa inventory` zeigt, was gemeldet würde. Programme anderer Benutzer und Store-Apps aller Benutzer brauchen Administrator- bzw.
 SYSTEM-Rechte; als SYSTEM testen z. B. mit `psexec -s` (Sysinternals) oder über den Dienst.
 
 **Gegen opensecmon nur mit einer Wegwerf-Instanz, nie gegen ein produktives opensecmon.** Am einfachsten in WSL mit
@@ -180,10 +180,10 @@ Ablauf (entschieden 2026-11-07, `PLAN.md` „Entschieden“ Punkte 6 und 8):
    - `signtool.exe` kommt mit dem Windows SDK; das Skript sucht es selbst, `PATH` ist nicht nötig.
    - Blockiert Smart App Control beim Bauen eine Datei unter `target\` (Abschnitt 4), den genannten Ordner löschen und
      das Skript noch einmal starten.
-3. Die fertige `setup.exe` auf den Linux-Laptop holen (z. B. als Anhang eines Entwurfs-Releases, über das NAS oder
+2. Die fertige `setup.exe` auf den Linux-Laptop holen (z. B. als Anhang eines Entwurfs-Releases, über das NAS oder
    einen USB-Stick) und dort vom Nutzer mit dem Herausgeber-Schlüssel signieren:
    `ssh-keygen -Y sign -f <Schlüssel> -n opensecagent opensecagent-<version>-x64-setup.exe` (ergibt `.sig`).
-4. Auf dem Laptop in opensecmon `dev/agent-packages.sh <Ordner>` (prüft Namen und Signatur gegen
+3. Auf dem Laptop in opensecmon `dev/agent-packages.sh <Ordner>` (prüft Namen und Signatur gegen
    `keys/allowed_signers`), dann das opensecmon-Paket bauen. Ein neuer Agent kommt so mit dem nächsten
    opensecmon-Paket zu den Anwendern.
 

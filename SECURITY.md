@@ -25,14 +25,22 @@ A vulnerability in the server side of the agent API belongs to [opensecmon](http
 
 ## Scope
 
-In scope: the service and the command line, the enrollment dialog and its use of `pkexec`, the reading of the inventory (dpkg,
-snap, Flatpak, later the Windows registry), the HTTPS connection to opensecmon and the check of its certificate, the storage of
-the token, the removal of the earlier script and the Debian package with its systemd unit and polkit action.
+In scope: the service and the command line, the enrollment dialogs (Linux with `pkexec`, Windows with
+`opensecagent-enroll.exe`, which asks for administrator rights), the reading of the inventory (dpkg, snap, Flatpak, the Windows
+registry, store apps, and the reader of registry hive files for `NTUSER.DAT`), the HTTPS connection to opensecmon and the check
+of its certificate, the storage of the token, the removal of the earlier script, the Debian package with its systemd unit and
+polkit action, and the Windows installer with the service and the access list of the agent's folder.
 
 Known and documented, not vulnerabilities in themselves:
 
 - On Linux the service runs as root, limited to reading files (`CAP_DAC_READ_SEARCH`, needed for the Flatpaks in the users' home
   folders) and writing only `/var/lib/opensecagent`. The token there is readable for root only.
+- On Windows the service runs as LocalSystem. Its folder `%ProgramData%\opensecagent` is open to SYSTEM and the administrators
+  only; the service refuses to start if a folder of that name belongs to another user or is a link.
+- On Windows the service reads the `NTUSER.DAT` of users who are not signed in. Such a file is under the control of its user, so
+  the hive reader treats it as untrusted input (every offset checked, bounded lists and steps, one level of index lists at most; fuzz test). It
+  opens the file read-only, without following links, and does not load it into the registry. A hive that cannot be read is
+  left out, so a user can hide their own programs from the report, not those of the machine or of others.
 - The enrollment code contains the address of opensecmon, the fingerprint of its certificate and a one-time code. Whoever gets the
   code before it is used can enroll a computer of their own in its place; opensecmon shows every enrollment.
 - The agent reports the names and versions of the installed software. It does not read file contents, and it never runs commands
