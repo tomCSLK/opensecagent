@@ -477,8 +477,10 @@ Vorschlag in Schritten, je mit Tests, Commit und Bericht:
   dann Installation auf dem eigenen Windows-Rechner durch den Nutzer (Wechsel vom Skript auf opensecagent mit
   „Neuen Code erzeugen“, damit der Rechner derselbe Eintrag bleibt). Danach README, CHANGELOG, Version.
   - **Installation auf dem eigenen Windows-Rechner erledigt (2026-11-10)**, direkt mit dem signierten Installer, ohne
-    WSL und saubere Umgebung (siehe 3e). Weitere Tests unter Windows vorerst nicht (Nutzer). Offen: README,
-    CHANGELOG, Version.
+    WSL und saubere Umgebung (siehe 3e). Weitere Tests unter Windows vorerst nicht (Nutzer).
+  - **README und CHANGELOG nachgezogen (2026-11-20, „go“ des Nutzers):** README mit Windows (was gemeldet wird,
+    Installer, Anmeldedialog, stille Installation, Log, Deinstallation, Dienst als LocalSystem, Lesen der Hives),
+    Wechsel vom Skript mit „Make a new code“; CHANGELOG mit 3b. Offen: Version (Windows trägt noch 0.1.2).
 
 Offen (vor oder bei den Schritten zu klären):
 1. Store-Apps: über die Windows-API (`PackageManager`, Crate `windows`) oder über `Get-AppxPackage` als Hilfsprozess?
