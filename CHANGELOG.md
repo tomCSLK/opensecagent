@@ -43,3 +43,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   service and the enrollment. `enroll --code-file` reads the code from a file and deletes it.
 - On Windows, the enrollment removes the agent script opensecmon offered before (scheduled task and folder
   `opensecmon-agent`).
+- On Windows, the programs of users who are not signed in: their `NTUSER.DAT` is read as a file with a small reader
+  of the registry hive format, without loading it into the registry. A hive that cannot be read is left out and noted
+  in the log.
